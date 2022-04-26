@@ -5,36 +5,10 @@
 #include "peripherals_init.h"
 #include "queue.h"
 #include "sj2_cli.h"
+#include "ssp0lab.h"
 #include "ssp2.h"
 #include <stdio.h>
 #include <string.h>
-
-// delete after demoing
-static volatile uint8_t slave_memory[256];
-bool i2c_slave_callback__read_memory(uint8_t memory_index, uint8_t *memory) {
-  if (memory_index <= 256) {
-    *memory = slave_memory[memory_index];
-    return true;
-  } else {
-    return false;
-  }
-}
-
-/**
- * Use memory_index to write memory_value
- * return true if this write operation was valid
- */
-bool i2c_slave_callback__write_memory(uint8_t memory_index, uint8_t memory_value) {
-  if (memory_index <= 256) {
-    slave_memory[memory_index] = memory_value;
-    return true;
-  } else {
-    return false;
-  }
-}
-
-// ^^^ need to delete, just keeping here so we can demo i2c lab. i2c.c depends on these functions, can't compile without
-// it
 
 static QueueHandle_t mp3_data_transfer_queue;
 QueueHandle_t songname_queue;
@@ -66,20 +40,29 @@ void mp3_decoder_ssp_init() {
   gpio_s ssp0ssel = gpio__construct_with_function(GPIO__PORT_0, 16, GPIO__FUNCTION_2);
   gpio_s ssp0miso = gpio__construct_with_function(GPIO__PORT_0, 17, GPIO__FUNCTION_2);
   gpio_s ssp0mosi = gpio__construct_with_function(GPIO__PORT_0, 18, GPIO__FUNCTION_2);
+  gpio_s mp3Reset = gpio__construct_as_output(GPIO__PORT_0, 1);
+  gpio__set(mp3Reset); // sets reset to HI
+  gpio__set(ssp0ssel); // sets CS to HI
+
 } // TODO: connect our MP3CLICK to the corresponding UART pins listed above
 
 void mp3_decoder_send_data_32_bytes(uint8_t data) {
   mp3_data_blocks_s buffer;
   xQueueReceive(mp3_data_transfer_queue, &buffer, portMAX_DELAY);
-  printf("data from controller recieved");
+  ssp0lab__exchange_byte(0x2); // write mode, because we want to write to the slave
+  ssp0lab__exchange_byte(0x7); // WRAM address
+  ssp0lab__exchange_byte(buffer.data);
+
+  printf("data from controller recieved\n");
 } // TODO: send data to mp3 decoder via spi
 
 static void play_file(FRESULT fil_handle) {
   mp3_data_blocks_s buffer;
-  printf("made it in the play_file outside the loop");
+  printf("made it in the play_file outside the loop\n");
   while (f_read(&file, buffer.data, sizeof(songname_s), &br) == FR_OK) {
+
     xQueueSend(mp3_data_transfer_queue, &buffer, portMAX_DELAY);
-    printf("sending to player task");
+    printf("sending to player task\n");
     if (br > buffer.data) {
       break;
     }
@@ -99,11 +82,11 @@ static void mp3_file_reader_task(void *parameter) {
   while (1) {
     // Wait here forever until we are instructed to open or play a particular file
     xQueueReceive(songname_queue, &filename_to_play, portMAX_DELAY);
-    printf("got the input from CLI");
+    printf("got the input from CLI\n");
     file_handle = f_open(&file, filename_to_play.songname, (FA_READ | FA_OPEN_EXISTING));
 
     if (file_handle == FR_OK) {
-      printf("made it to the if statement");
+      printf("made it to the if statement\n");
       play_file(file_handle);
       f_close(&file);
     } else {
@@ -126,10 +109,10 @@ static void transfer_data_block(mp3_data_blocks_s *mp3_playback_buffer) {
 
 static void mp3_data_transfer_task(void *parameter) {
   mp3_data_blocks_s mp3_playback_buffer;
-
+  ssp0lab__exchange_byte(0x2); // write mode, because we want to write to the slave
   while (1) {
     if (xQueueReceive(mp3_data_transfer_queue, &mp3_playback_buffer, portMAX_DELAY)) {
-      printf("recieved from read_task");
+      printf("recieved from read_task\n");
       transfer_data_block(&mp3_playback_buffer);
     }
   }
@@ -149,6 +132,7 @@ int main(void) {
   mp3_data_transfer_queue = xQueueCreate(2, sizeof(mp3_data_blocks_s));
   songname_queue = xQueueCreate(1, sizeof(songname_s));
   mp3_decoder_ssp_init();
+  ssp0lab__init();
   // xTaskCreate(cpu_utilization_print_task, "cpu", 1, NULL, PRIORITY_LOW, NULL);
   sj2_cli__init();
   xTaskCreate(mp3_file_reader_task, "reader", 2000 / sizeof(void *), NULL, PRIORITY_LOW, NULL);

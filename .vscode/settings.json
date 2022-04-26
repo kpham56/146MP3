@@ -52,6 +52,7 @@
         "mutex": "c",
         "shared_mutex": "c",
         "stdint.h": "c",
-        "peripherals_init.h": "c"
+        "peripherals_init.h": "c",
+        "ssp2.h": "c"
     }
 }

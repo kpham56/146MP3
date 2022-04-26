@@ -9,7 +9,7 @@
 #include "lpc_peripherals.h"
 
 /// Set to non-zero to enable debugging, and then you can use I2C__DEBUG_PRINTF()
-#define I2C__ENABLE_DEBUGGING 1
+#define I2C__ENABLE_DEBUGGING 0
 
 #if I2C__ENABLE_DEBUGGING
 #include <stdio.h>
@@ -409,14 +409,12 @@ static bool i2c__handle_state_machine(i2c_s *i2c) {
 
   // Slave Transmitter States (ST):
   case I2C__STATE_ST_SLAVE_READ_ACK: // 0xA8
-    i2c_slave_callback__read_memory(i2c->slave_input_byte_pointer, &(lpc_i2c->DAT));
     ++(i2c->slave_input_byte_pointer);
     i2c__set_ack_flag(lpc_i2c);
     i2c__clear_si_flag_for_hw_to_take_next_action(lpc_i2c);
     break;
 
   case I2C__STATE_ST_SLAVE_DATA_ACK: // 0xB8
-    i2c_slave_callback__read_memory(i2c->slave_input_byte_pointer, &(lpc_i2c->DAT));
     ++(i2c->slave_input_byte_pointer);
     i2c__set_ack_flag(lpc_i2c);
     i2c__clear_si_flag_for_hw_to_take_next_action(lpc_i2c);
@@ -441,7 +439,6 @@ static bool i2c__handle_state_machine(i2c_s *i2c) {
     if (i2c->slave_count == 0) {
       i2c->slave_input_byte_pointer = lpc_i2c->DAT;
     } else {
-      i2c_slave_callback__write_memory(i2c->slave_input_byte_pointer, lpc_i2c->DAT);
       ++(i2c->slave_input_byte_pointer);
     }
     ++(i2c->slave_count);
