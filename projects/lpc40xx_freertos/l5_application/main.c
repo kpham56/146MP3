@@ -6,7 +6,6 @@
 #include "queue.h"
 #include "sj2_cli.h"
 #include "ssp0lab.h"
-#include "ssp2.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -34,6 +33,18 @@ bool mp3_decoder_is_asking_for_data(void) {
 } // if dreq (data request) pin is high, that means decoder is asking for data. I set this pin to 0,1 on our board.
 // TODO: connect MP3click DRQ to 0,1
 
+void SCI_write(uint8_t addr, uint8_t data){
+  uint16_t write_with_addr = (0x02 << 8) + addr;
+  ssp0labexchange_byte(write_with_addr);
+  ssp0labexchange_byte(data);
+}
+
+void SCI_read(uint8_t addr, uint8_t data){
+  uint16_t read_with_addr = (0x03 << 8) + addr;
+  ssp0labexchange_byte(read_with_addr);
+  ssp0labexchange_byte(addr);
+}
+
 void mp3_decoder_ssp_init() {
 
   gpio_s ssp0sck = gpio__construct_with_function(GPIO__PORT_0, 15, GPIO__FUNCTION_2);
@@ -41,17 +52,21 @@ void mp3_decoder_ssp_init() {
   gpio_s ssp0miso = gpio__construct_with_function(GPIO__PORT_0, 17, GPIO__FUNCTION_2);
   gpio_s ssp0mosi = gpio__construct_with_function(GPIO__PORT_0, 18, GPIO__FUNCTION_2);
   gpio_s mp3Reset = gpio__construct_as_output(GPIO__PORT_0, 1);
-  gpio__set(mp3Reset); // sets reset to HI
-  gpio__set(ssp0ssel); // sets CS to HI
+  gpio_s dcs = gpio__construct_as_output(GPIO__PORT_1, 14);
+  gpio__set(mp3Reset);   // sets reset to HI
+  gpio__reset(ssp0ssel); // sets CS to HI
+  gpio__set(dcs);        // sets dcs to LOW
 
 } // TODO: connect our MP3CLICK to the corresponding UART pins listed above
 
 void mp3_decoder_send_data_32_bytes(uint8_t data) {
   mp3_data_blocks_s buffer;
-  xQueueReceive(mp3_data_transfer_queue, &buffer, portMAX_DELAY);
+  uint8_t response;
+  printf("THIS IS THE DATA %i, ", data);
   ssp0lab__exchange_byte(0x2); // write mode, because we want to write to the slave
   ssp0lab__exchange_byte(0x7); // WRAM address
-  ssp0lab__exchange_byte(buffer.data);
+  response = ssp0lab__exchange_byte(data);
+  printf("THIS IS FROM THE MP3 %i, ", response);
 
   printf("data from controller recieved\n");
 } // TODO: send data to mp3 decoder via spi
@@ -117,6 +132,7 @@ static void mp3_data_transfer_task(void *parameter) {
     }
   }
 }
+
 bool pause_button_is_pressed(gpio_s button) {
   if (gpio__get(button)) {
     return true;

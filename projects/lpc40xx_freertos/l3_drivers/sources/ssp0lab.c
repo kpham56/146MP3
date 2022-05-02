@@ -14,8 +14,7 @@ void ssp0lab__init() {
   LPC_SSP0->CR0 = (dataSize8bits << 0) | (scr_value << 8);
   LPC_SSP0->CR1 = 0b1 << 1; // sse enable
   // c) Setup prescalar register to be <= max_clock_mhz
-  LPC_SSP0->CPSR = 24;
-  // 96/4 = 24mhz clock
+  LPC_SSP0->CPSR = 1;
 }
 
 void busy_wait(void) {
