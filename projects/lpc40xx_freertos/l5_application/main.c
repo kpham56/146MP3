@@ -9,6 +9,11 @@
 #include <stdio.h>
 #include <string.h>
 
+gpio_s CS = {2, 0};
+gpio_s DCS = {2, 1};
+gpio_s reset = {2, 2};
+gpio_s DREQ = {2, 5};
+
 static QueueHandle_t mp3_data_transfer_queue;
 QueueHandle_t songname_queue;
 FIL file;
@@ -33,29 +38,72 @@ bool mp3_decoder_is_asking_for_data(void) {
 } // if dreq (data request) pin is high, that means decoder is asking for data. I set this pin to 0,1 on our board.
 // TODO: connect MP3click DRQ to 0,1
 
-void SCI_write(uint8_t addr, uint8_t data){
-  uint16_t write_with_addr = (0x02 << 8) + addr;
-  ssp0labexchange_byte(write_with_addr);
-  ssp0labexchange_byte(data);
+void SCI_write(uint8_t addr, uint8_t data) {
+  ssp0lab__exchange_byte(0x02);
+  ssp0lab__exchange_byte(addr);
+  ssp0lab__exchange_byte(data);
 }
 
-void SCI_read(uint8_t addr, uint8_t data){
-  uint16_t read_with_addr = (0x03 << 8) + addr;
-  ssp0labexchange_byte(read_with_addr);
-  ssp0labexchange_byte(addr);
+uint8_t SCI_read(uint8_t addr) {
+  uint8_t dummyByte = 0xF;
+  ssp0lab__exchange_byte(0x03);
+  ssp0lab__exchange_byte(addr);
+  return ssp0lab__exchange_byte(dummyByte);
+}
+void SCI_32byte_write(uint8_t addr, uint16_t reg_data) {
+  uint8_t data_MSB = (reg_data >> 8);
+  uint8_t data_LSB = reg_data;
+  gpio_reset(CS);
+  gpio_set(DCS);
+  ssp0lab__exchange_byte(0x02); // write mode = 0x02
+  ssp0lab__exchange_byte(addr);
+  ssp0lab__exchange_byte(data_MSB);
+  ssp0lab__exchange_byte(data_LSB);
+  gpio__set(CS);
+}
+
+uint8_t SCI_32byte_read(uint8_t addr) {
+  uint8_t dummybyte = 0xFF;
+  uint16_t data16_byte = 0;
+  uint8_t temp;
+  gpio__reset(CS);
+  gpio__set(DCS);
+  ssp0lab__exchange_byte(0x03); // read = 0x03
+  ssp0lab__exchange_byte(addr);
+  data16_byte = (ssp0lab__exchange_byte(dummybyte) << 8);
+  temp = ssp0lab__exchange_byte(dummybyte);
+  gpio__set(CS);
+  return temp;
 }
 
 void mp3_decoder_ssp_init() {
-
+  /*
+  green = ground
+  orange = reset
+  blue = sck
+  red = ssel
+  white = mosi
+  brown = miso
+  */
   gpio_s ssp0sck = gpio__construct_with_function(GPIO__PORT_0, 15, GPIO__FUNCTION_2);
-  gpio_s ssp0ssel = gpio__construct_with_function(GPIO__PORT_0, 16, GPIO__FUNCTION_2);
+  // gpio__set_as_output(ssp0sck);
   gpio_s ssp0miso = gpio__construct_with_function(GPIO__PORT_0, 17, GPIO__FUNCTION_2);
+  // gpio__set_as_input(ssp0miso);
   gpio_s ssp0mosi = gpio__construct_with_function(GPIO__PORT_0, 18, GPIO__FUNCTION_2);
-  gpio_s mp3Reset = gpio__construct_as_output(GPIO__PORT_0, 1);
-  gpio_s dcs = gpio__construct_as_output(GPIO__PORT_1, 14);
-  gpio__set(mp3Reset);   // sets reset to HI
-  gpio__reset(ssp0ssel); // sets CS to HI
-  gpio__set(dcs);        // sets dcs to LOW
+  // gpio__set_as_output(ssp0mosi);
+  gpio__set_as_output(CS);
+  gpio__set_as_output(DCS);
+  gpio__set_as_output(reset);
+  gpio__set_as_output(DREQ);
+  gpio__reset(reset); // sets reset to LOW
+  gpio__set(reset);   // sets reset to HI
+  gpio__set(DREQ);
+  gpio__set(CS);      // sets CS to HI
+  gpio__set(DCS);     // sets dcs to HI
+
+  // SCI_32byte_write(0x03, 0x6000);
+  // printf("reading from 0x03 clock %x \n", SCI_32byte_read(0x03));
+  printf("reading from 0x01 status %04X \n", SCI_32byte_read(0x01));
 
 } // TODO: connect our MP3CLICK to the corresponding UART pins listed above
 
@@ -63,10 +111,11 @@ void mp3_decoder_send_data_32_bytes(uint8_t data) {
   mp3_data_blocks_s buffer;
   uint8_t response;
   printf("THIS IS THE DATA %i, ", data);
-  ssp0lab__exchange_byte(0x2); // write mode, because we want to write to the slave
-  ssp0lab__exchange_byte(0x7); // WRAM address
-  response = ssp0lab__exchange_byte(data);
-  printf("THIS IS FROM THE MP3 %i, ", response);
+  SCI_write(0x7, data);
+  // ssp0lab__exchange_byte(0x2); // write mode, because we want to write to the slave
+  // ssp0lab__exchange_byte(0x7); // WRAM address
+  // response = ssp0lab__exchange_byte(data);
+  // printf("THIS IS FROM THE MP3 %i, ", response);
 
   printf("data from controller recieved\n");
 } // TODO: send data to mp3 decoder via spi
@@ -147,8 +196,8 @@ int main(void) {
 
   mp3_data_transfer_queue = xQueueCreate(2, sizeof(mp3_data_blocks_s));
   songname_queue = xQueueCreate(1, sizeof(songname_s));
+  ssp0initialize(1);
   mp3_decoder_ssp_init();
-  ssp0lab__init();
   // xTaskCreate(cpu_utilization_print_task, "cpu", 1, NULL, PRIORITY_LOW, NULL);
   sj2_cli__init();
   xTaskCreate(mp3_file_reader_task, "reader", 2000 / sizeof(void *), NULL, PRIORITY_LOW, NULL);

@@ -53,6 +53,8 @@
         "shared_mutex": "c",
         "stdint.h": "c",
         "peripherals_init.h": "c",
-        "ssp2.h": "c"
+        "ssp2.h": "c",
+        "ssp0lab.h": "c",
+        "lpc_peripherals.h": "c"
     }
 }
