@@ -11,7 +11,7 @@
 void ssp0initialize(uint32_t max_clock_khz) {
   lpc_peripheral__turn_on_power_to(LPC_PERIPHERAL__SSP0);
 
-  LPC_SSP0->CR0 = 0b1111;   // 16-bit mode
+  LPC_SSP0->CR0 = 0b111;    // 8-bit mode
   LPC_SSP0->CR1 = (1 << 1); // Enable SSP as Master
   ssp0__set_max_clock(max_clock_khz);
 }
