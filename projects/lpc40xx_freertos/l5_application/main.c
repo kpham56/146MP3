@@ -19,8 +19,6 @@ uint8_t volumeSteps = 20;
 
 static QueueHandle_t mp3_data_transfer_queue;
 QueueHandle_t songname_queue;
-// FIL file;
-// FRESULT file_handle;
 
 typedef struct {
   uint8_t data[512]; // Align data size to the way data is read from the SD card
@@ -29,16 +27,6 @@ typedef struct {
 typedef struct {
   char songname[64];
 } songname_s;
-
-bool mp3_decoder_is_asking_for_data(void) {
-  gpio__set_as_input(DREQ);
-  if (gpio__get(DREQ)) {
-    return true;
-  } else {
-    return false;
-  }
-} // if dreq (data request) pin is high, that means decoder is asking for data. I set this pin to 0,1 on our board.
-// TODO: connect MP3click DRQ to 0,1
 
 void SCI_write(uint8_t addr, uint8_t data) {
   ssp0lab__exchange_byte(0x02);
@@ -78,22 +66,11 @@ uint16_t SCI_32byte_read(uint8_t addr) {
 }
 
 void mp3_decoder_ssp_init() {
-  /*
-  green = ground
-  orange = reset
-  blue = sck
-  red = cs
-  white = mosi
-  brown = miso
-  purple = dreq
-  black = dcs
-  */
+
   gpio_s ssp0sck = gpio__construct_with_function(GPIO__PORT_0, 15, GPIO__FUNCTION_2);
-  // gpio__set_as_output(ssp0sck);
   gpio_s ssp0miso = gpio__construct_with_function(GPIO__PORT_0, 17, GPIO__FUNCTION_2);
   gpio__set_as_input(ssp0miso);
   gpio_s ssp0mosi = gpio__construct_with_function(GPIO__PORT_0, 18, GPIO__FUNCTION_2);
-  // gpio__set_as_output(ssp0mosi);
   gpio__set_as_output(CS);
   gpio__set_as_output(DCS);
   gpio__set_as_output(reset);
@@ -105,7 +82,6 @@ void mp3_decoder_ssp_init() {
   gpio__set(DCS); // sets dcs to HI
 
   SCI_32byte_write(0x03, 0x6000);
-  // SCI_32byte_write(0x1, 0x0040);
   SCI_32byte_write(0xb, 0x0);
   printf("reading from 0x03 clock %x \n", SCI_32byte_read(0x03));
   printf("reading from 0x01 status %04X \n", SCI_32byte_read(0x01));
@@ -114,41 +90,20 @@ void mp3_decoder_ssp_init() {
 }
 
 void mp3_decoder_send_data_32_bytes(uint8_t data) {
-  // mp3_data_blocks_s buffer;
   uint8_t response;
-  // printf("THIS IS THE DATA %i, ", data);
   gpio__set(CS);
   gpio__reset(DCS);
   ssp0lab__exchange_byte(data);
-  // SCI_32byte_write(0x7, data);
-  // printf("%02x ", data);
   gpio__set(DCS);
-  // printf("reading from 0x01 status %04X \n", SCI_32byte_read(0x01));
-
-  // SCI_write(0x7, data);
-  // ssp0lab__exchange_byte(0x2); // write mode, because we want to write to the slave
-  // ssp0lab__exchange_byte(0x7); // WRAM address
-  // response = ssp0lab__exchange_byte(data);
-  // printf("THIS IS FROM THE MP3 %i, ", response);
-
-  // printf("data from controller recieved\n");
-} // TODO: send data to mp3 decoder via spi
+}
 
 static void play_file(FIL *fil_handle) {
 
   UINT br, bw;
   mp3_data_blocks_s buffer;
-  // printf("made it in the play_file outside the loop\n");
   while (f_read(fil_handle, buffer.data, 512, &br) == FR_OK) {
 
     xQueueSend(mp3_data_transfer_queue, &buffer, portMAX_DELAY);
-    // printf("sending to player task\n");
-    // if (br > buffer.data) {
-    //   break;
-    // }
-    // while (pause_button_is_pressed(port_pin_0)) {
-    //   vTaskDelay(10);
-    // }
 
     if (uxQueueMessagesWaiting(songname_queue) > 0) {
       break;
@@ -162,13 +117,10 @@ static void mp3_file_reader_task(void *parameter) {
   while (1) {
     FIL file;
     FRESULT Res;
-    // Wait here forever until we are instructed to open or play a particular file
     xQueueReceive(songname_queue, &filename_to_play, portMAX_DELAY);
-    // printf("got the input from CLI\n");
     Res = f_open(&file, filename_to_play.songname, (FA_READ | FA_OPEN_EXISTING));
 
     if (Res == FR_OK) {
-      // printf("made it to the if statement\n");
       play_file(&file);
       f_close(&file);
     } else {
@@ -180,12 +132,6 @@ static void mp3_file_reader_task(void *parameter) {
 
 static void transfer_data_block(mp3_data_blocks_s *mp3_playback_buffer) {
   for (size_t index = 0; index < 512; index++) {
-    // if (gpio__get(DREQ)) {
-    //   mp3_decoder_send_data_32_bytes(mp3_playback_buffer->data[index]);
-    //   index += 1;
-    // } else {
-    //   vTaskDelay(1);
-    // }
     while (!gpio__get(DREQ)) {
       vTaskDelay(1);
     }
@@ -195,10 +141,9 @@ static void transfer_data_block(mp3_data_blocks_s *mp3_playback_buffer) {
 
 static void mp3_data_transfer_task(void *parameter) {
   mp3_data_blocks_s mp3_playback_buffer;
-  ssp0lab__exchange_byte(0x2); // write mode, because we want to write to the slave
+  ssp0lab__exchange_byte(0x2);
   while (1) {
     if (xQueueReceive(mp3_data_transfer_queue, &mp3_playback_buffer, portMAX_DELAY)) {
-      // printf("recieved from read_task\n");
       transfer_data_block(&mp3_playback_buffer);
     }
   }
