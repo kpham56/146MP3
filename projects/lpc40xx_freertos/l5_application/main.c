@@ -2,7 +2,9 @@
 #include "cli_handlers.h"
 #include "ff.h"
 #include "l3_drivers\gpio.h"
+#include "mp3Functions.h"
 #include "peripherals_init.h"
+#include "playback.h"
 #include "queue.h"
 #include "sj2_cli.h"
 #include "ssp0lab.h"
@@ -14,9 +16,6 @@ gpio_s DCS = {GPIO__PORT_2, 1};
 gpio_s reset = {GPIO__PORT_2, 2};
 gpio_s DREQ = {GPIO__PORT_2, 5};
 
-uint16_t maxVolume = 0xFEFE;
-uint8_t volumeSteps = 20;
-
 static QueueHandle_t mp3_data_transfer_queue;
 QueueHandle_t songname_queue;
 
@@ -27,43 +26,6 @@ typedef struct {
 typedef struct {
   char songname[64];
 } songname_s;
-
-void SCI_write(uint8_t addr, uint8_t data) {
-  ssp0lab__exchange_byte(0x02);
-  ssp0lab__exchange_byte(addr);
-  ssp0lab__exchange_byte(data);
-}
-
-uint8_t SCI_read(uint8_t addr) {
-  uint8_t dummyByte = 0xF;
-  ssp0lab__exchange_byte(0x03);
-  ssp0lab__exchange_byte(addr);
-  return ssp0lab__exchange_byte(dummyByte);
-}
-void SCI_32byte_write(uint8_t addr, uint16_t reg_data) {
-  uint8_t data_MSB = (reg_data >> 8);
-  uint8_t data_LSB = reg_data;
-  gpio__reset(CS);
-  gpio__set(DCS);
-  ssp0lab__exchange_byte(0x02); // write mode = 0x02
-  ssp0lab__exchange_byte(addr);
-  ssp0lab__exchange_byte(data_MSB);
-  ssp0lab__exchange_byte(data_LSB);
-  gpio__set(CS);
-}
-
-uint16_t SCI_32byte_read(uint8_t addr) {
-  uint8_t dummybyte = 0x01;
-  uint16_t data16_byte = 0;
-  gpio__reset(CS);
-  gpio__set(DCS);
-  ssp0lab__exchange_byte(0x03); // read mode = 0x03
-  ssp0lab__exchange_byte(addr);
-  data16_byte = (ssp0lab__exchange_byte(dummybyte) << 8);
-  data16_byte |= ssp0lab__exchange_byte(dummybyte);
-  gpio__set(CS);
-  return data16_byte;
-}
 
 void mp3_decoder_ssp_init() {
 
@@ -81,12 +43,12 @@ void mp3_decoder_ssp_init() {
   gpio__set(CS);  // sets CS to HI
   gpio__set(DCS); // sets dcs to HI
 
-  SCI_32byte_write(0x03, 0x6000);
-  SCI_32byte_write(0xb, 0x0);
-  printf("reading from 0x03 clock %x \n", SCI_32byte_read(0x03));
-  printf("reading from 0x01 status %04X \n", SCI_32byte_read(0x01));
-  printf("reading from 0x0b volume %04X \n", SCI_32byte_read(0xb));
-  printf("reading from 0x00 mode %04X \n", SCI_32byte_read(0x0));
+  SCI_32byte_write(CS, DCS, 0x03, 0x6000);
+  SCI_32byte_write(CS, DCS, 0xb, 0x0);
+  printf("reading from 0x03 clock %x \n", SCI_32byte_read(CS, DCS, 0x03));
+  printf("reading from 0x01 status %04X \n", SCI_32byte_read(CS, DCS, 0x01));
+  printf("reading from 0x0b volume %04X \n", SCI_32byte_read(CS, DCS, 0xb));
+  printf("reading from 0x00 mode %04X \n", SCI_32byte_read(CS, DCS, 0x0));
 }
 
 void mp3_decoder_send_data_32_bytes(uint8_t data) {
@@ -148,43 +110,6 @@ static void mp3_data_transfer_task(void *parameter) {
     }
   }
 }
-
-bool pause_button_is_pressed(gpio_s button) {
-  if (gpio__get(button)) {
-    return true;
-  } else
-    return false;
-}
-
-void volumeUp(gpio_s button) {
-  uint16_t volumeSteps = maxVolume / volumeSteps;
-  if (gpio__get(button)) {
-    uint16_t currentVolume = SCI_32byte_read(0xb);
-    if (currentVolume != maxVolume) {
-      currentVolume += volumeSteps;
-      SCI_32byte_write(0xb, currentVolume);
-    }
-  }
-}
-
-void volumeDown(gpio_s button) {
-  uint16_t volumeSteps = maxVolume / volumeSteps;
-  if (gpio__get(button)) {
-    uint16_t currentVolume = SCI_32byte_read(0xb);
-    if (currentVolume != 0x0000) {
-      currentVolume -= volumeSteps;
-      SCI_32byte_write(0xb, currentVolume);
-    }
-  }
-}
-
-void pauseMusic(gpio_s button) {}
-
-void playMusic(gpio_s button) {}
-
-void nextSong(gpio_s button) {}
-
-void previousSong(gpio_s button) {}
 
 int main(void) {
   gpio__construct_as_input(GPIO__PORT_0, 29); // sw3 || 0.29
