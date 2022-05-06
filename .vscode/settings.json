@@ -55,6 +55,8 @@
         "peripherals_init.h": "c",
         "ssp2.h": "c",
         "ssp0lab.h": "c",
-        "lpc_peripherals.h": "c"
+        "lpc_peripherals.h": "c",
+        "optional": "c",
+        "random": "c"
     }
 }
