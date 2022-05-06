@@ -9,16 +9,18 @@
 #include <stdio.h>
 #include <string.h>
 
-gpio_s CS = {2, 0};
-gpio_s DCS = {2, 1};
-gpio_s reset = {2, 2};
-gpio_s DREQ = {2, 5};
+gpio_s CS = {GPIO__PORT_2, 0};
+gpio_s DCS = {GPIO__PORT_2, 1};
+gpio_s reset = {GPIO__PORT_2, 2};
+gpio_s DREQ = {GPIO__PORT_2, 5};
+
+uint16_t maxVolume = 0xFEFE;
+uint8_t volumeSteps = 20;
 
 static QueueHandle_t mp3_data_transfer_queue;
 QueueHandle_t songname_queue;
-FIL file;
-FRESULT file_handle;
-UINT br, bw;
+// FIL file;
+// FRESULT file_handle;
 
 typedef struct {
   uint8_t data[512]; // Align data size to the way data is read from the SD card
@@ -95,7 +97,7 @@ void mp3_decoder_ssp_init() {
   gpio__set_as_output(CS);
   gpio__set_as_output(DCS);
   gpio__set_as_output(reset);
-  gpio__set_as_output(DREQ);
+  gpio__set_as_input(DREQ);
   gpio__reset(reset); // sets reset to LOW
   gpio__set(reset);   // sets reset to HI
   gpio__set(DREQ);
@@ -103,22 +105,26 @@ void mp3_decoder_ssp_init() {
   gpio__set(DCS); // sets dcs to HI
 
   SCI_32byte_write(0x03, 0x6000);
-  SCI_32byte_write(0x1, 0x0040);
+  // SCI_32byte_write(0x1, 0x0040);
   SCI_32byte_write(0xb, 0x0);
   printf("reading from 0x03 clock %x \n", SCI_32byte_read(0x03));
   printf("reading from 0x01 status %04X \n", SCI_32byte_read(0x01));
-  printf("reading from 0x01 volume %04X \n", SCI_32byte_read(0xb));
-
-} // TODO: connect our MP3CLICK to the corresponding UART pins listed above
+  printf("reading from 0x0b volume %04X \n", SCI_32byte_read(0xb));
+  printf("reading from 0x00 mode %04X \n", SCI_32byte_read(0x0));
+}
 
 void mp3_decoder_send_data_32_bytes(uint8_t data) {
-  mp3_data_blocks_s buffer;
+  // mp3_data_blocks_s buffer;
   uint8_t response;
   // printf("THIS IS THE DATA %i, ", data);
   gpio__set(CS);
   gpio__reset(DCS);
   ssp0lab__exchange_byte(data);
+  // SCI_32byte_write(0x7, data);
+  // printf("%02x ", data);
   gpio__set(DCS);
+  // printf("reading from 0x01 status %04X \n", SCI_32byte_read(0x01));
+
   // SCI_write(0x7, data);
   // ssp0lab__exchange_byte(0x2); // write mode, because we want to write to the slave
   // ssp0lab__exchange_byte(0x7); // WRAM address
@@ -128,16 +134,18 @@ void mp3_decoder_send_data_32_bytes(uint8_t data) {
   // printf("data from controller recieved\n");
 } // TODO: send data to mp3 decoder via spi
 
-static void play_file(FRESULT fil_handle) {
+static void play_file(FIL *fil_handle) {
+
+  UINT br, bw;
   mp3_data_blocks_s buffer;
   // printf("made it in the play_file outside the loop\n");
-  while (f_read(&file, buffer.data, sizeof(songname_s), &br) == FR_OK) {
+  while (f_read(fil_handle, buffer.data, 512, &br) == FR_OK) {
 
     xQueueSend(mp3_data_transfer_queue, &buffer, portMAX_DELAY);
     // printf("sending to player task\n");
-    if (br > buffer.data) {
-      break;
-    }
+    // if (br > buffer.data) {
+    //   break;
+    // }
     // while (pause_button_is_pressed(port_pin_0)) {
     //   vTaskDelay(10);
     // }
@@ -152,14 +160,16 @@ static void mp3_file_reader_task(void *parameter) {
   songname_s filename_to_play = {};
 
   while (1) {
+    FIL file;
+    FRESULT Res;
     // Wait here forever until we are instructed to open or play a particular file
     xQueueReceive(songname_queue, &filename_to_play, portMAX_DELAY);
     // printf("got the input from CLI\n");
-    file_handle = f_open(&file, filename_to_play.songname, (FA_READ | FA_OPEN_EXISTING));
+    Res = f_open(&file, filename_to_play.songname, (FA_READ | FA_OPEN_EXISTING));
 
-    if (file_handle == FR_OK) {
+    if (Res == FR_OK) {
       // printf("made it to the if statement\n");
-      play_file(file_handle);
+      play_file(&file);
       f_close(&file);
     } else {
       printf("Unable to open and read file: %s\n", filename_to_play.songname);
@@ -169,13 +179,17 @@ static void mp3_file_reader_task(void *parameter) {
 }
 
 static void transfer_data_block(mp3_data_blocks_s *mp3_playback_buffer) {
-  for (size_t index = 0; index < sizeof(mp3_playback_buffer);) {
-    if (1) {
-      mp3_decoder_send_data_32_bytes(mp3_playback_buffer->data[index]);
-      index += 1;
-    } else {
+  for (size_t index = 0; index < 512; index++) {
+    // if (gpio__get(DREQ)) {
+    //   mp3_decoder_send_data_32_bytes(mp3_playback_buffer->data[index]);
+    //   index += 1;
+    // } else {
+    //   vTaskDelay(1);
+    // }
+    while (!gpio__get(DREQ)) {
       vTaskDelay(1);
     }
+    mp3_decoder_send_data_32_bytes(mp3_playback_buffer->data[index]);
   }
 }
 
@@ -197,6 +211,36 @@ bool pause_button_is_pressed(gpio_s button) {
     return false;
 }
 
+void volumeUp(gpio_s button) {
+  uint16_t volumeSteps = maxVolume / volumeSteps;
+  if (gpio__get(button)) {
+    uint16_t currentVolume = SCI_32byte_read(0xb);
+    if (currentVolume != maxVolume) {
+      currentVolume += volumeSteps;
+      SCI_32byte_write(0xb, currentVolume);
+    }
+  }
+}
+
+void volumeDown(gpio_s button) {
+  uint16_t volumeSteps = maxVolume / volumeSteps;
+  if (gpio__get(button)) {
+    uint16_t currentVolume = SCI_32byte_read(0xb);
+    if (currentVolume != 0x0000) {
+      currentVolume -= volumeSteps;
+      SCI_32byte_write(0xb, currentVolume);
+    }
+  }
+}
+
+void pauseMusic(gpio_s button) {}
+
+void playMusic(gpio_s button) {}
+
+void nextSong(gpio_s button) {}
+
+void previousSong(gpio_s button) {}
+
 int main(void) {
   gpio__construct_as_input(GPIO__PORT_0, 29); // sw3 || 0.29
   gpio_s port_pin_0 = gpio__construct(GPIO__PORT_0, 29);
@@ -204,7 +248,7 @@ int main(void) {
 
   mp3_data_transfer_queue = xQueueCreate(2, sizeof(mp3_data_blocks_s));
   songname_queue = xQueueCreate(1, sizeof(songname_s));
-  ssp0initialize(1000);
+  ssp0initialize(1);
   mp3_decoder_ssp_init();
   // xTaskCreate(cpu_utilization_print_task, "cpu", 1, NULL, PRIORITY_LOW, NULL);
   sj2_cli__init();
