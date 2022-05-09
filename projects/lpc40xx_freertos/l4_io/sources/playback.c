@@ -2,9 +2,10 @@
 #include <stdint.h>
 #include <stdio.h>
 
-const uint16_t maxVolume = 0xFEFE;
+const uint16_t noVolume = 0xFEFE;
+const uint16_t maxVolume = 0x0000;
 const uint8_t volumeSteps = 100;
-uint16_t volumeStepSize = maxVolume / volumeSteps;
+uint16_t volumeStepSize = 0xFE / volumeSteps;
 uint8_t musicControl = 0;
 uint8_t modeAddress = 0x0;
 gpio_s CS;
@@ -29,13 +30,19 @@ void nextSong(gpio_s button) {}
 
 void previousSong(gpio_s button) {}
 
+uint16_t volumeCombine(uint8_t volumeLeft, uint8_t volumeRight) { return ((volumeLeft << 8) | volumeRight); }
+
 void volumeUp() {
   if (gpio__get(volumeUpButton)) {
-    uint16_t currentVolume = SCI_32byte_read(CS, DCS, 0xb);
+    uint8_t currentVolumeLeft = (SCI_32byte_read(CS, DCS, 0xb) >> 8);
+    uint8_t currentVolumeRight = (0xFF & SCI_32byte_read(CS, DCS, 0xb));
+    uint16_t currentVolume = volumeCombine(currentVolumeLeft, currentVolumeRight);
     printf("current volume is %x \n", currentVolume);
-    if (currentVolume != 0x0000 + volumeStepSize) {
+    if (currentVolume != maxVolume) {
       printf("volume step size is %x \n", volumeStepSize);
-      currentVolume -= volumeStepSize;
+      currentVolumeLeft -= volumeStepSize;
+      currentVolumeRight -= volumeStepSize;
+      currentVolume = volumeCombine(currentVolumeLeft, currentVolumeRight);
       printf("volume is now %x \n", currentVolume);
       SCI_32byte_write(CS, DCS, 0xb, currentVolume);
     }
@@ -45,9 +52,13 @@ void volumeUp() {
 void volumeDown() {
   // uint16_t volumeStepSize = maxVolume / volumeSteps;
   if (gpio__get(volumeDownButton)) {
-    uint16_t currentVolume = SCI_32byte_read(CS, DCS, 0xb);
-    if (currentVolume != maxVolume - volumeStepSize) {
-      currentVolume += volumeStepSize;
+    uint8_t currentVolumeLeft = (SCI_32byte_read(CS, DCS, 0xb) >> 8);
+    uint8_t currentVolumeRight = (0xFF & SCI_32byte_read(CS, DCS, 0xb));
+    uint16_t currentVolume = volumeCombine(currentVolumeLeft, currentVolumeRight);
+    if (currentVolume != noVolume) {
+      currentVolumeLeft += volumeStepSize;
+      currentVolumeRight += volumeStepSize;
+      currentVolume = volumeCombine(currentVolumeLeft, currentVolumeRight);
       printf("volume down! %x \n", currentVolume);
       SCI_32byte_write(CS, DCS, 0xb, currentVolume);
     }

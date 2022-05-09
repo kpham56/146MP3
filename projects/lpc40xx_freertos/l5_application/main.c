@@ -75,7 +75,6 @@ static void mp3_data_transfer_task(void *parameter) {
   while (1) {
     volumeUp();
     volumeDown();
-    printf("reading from 0x0b volume %04X \n", SCI_32byte_read(CS, DCS, 0xb));
     if (xQueueReceive(mp3_data_transfer_queue, &mp3_playback_buffer, portMAX_DELAY)) {
       transfer_data_block(&mp3_playback_buffer);
     }
