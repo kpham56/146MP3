@@ -73,6 +73,9 @@ static void mp3_data_transfer_task(void *parameter) {
   mp3_data_blocks_s mp3_playback_buffer;
   ssp0lab__exchange_byte(0x2);
   while (1) {
+    volumeUp();
+    volumeDown();
+    printf("reading from 0x0b volume %04X \n", SCI_32byte_read(CS, DCS, 0xb));
     if (xQueueReceive(mp3_data_transfer_queue, &mp3_playback_buffer, portMAX_DELAY)) {
       transfer_data_block(&mp3_playback_buffer);
     }
@@ -87,6 +90,7 @@ int main(void) {
   mp3_data_transfer_queue = xQueueCreate(2, sizeof(mp3_data_blocks_s));
   songname_queue = xQueueCreate(1, sizeof(songname_s));
   ssp0initialize(1);
+  playbackInit(CS, DCS);
   mp3_decoder_ssp_init(CS, DCS, DREQ, RESET);
   // xTaskCreate(cpu_utilization_print_task, "cpu", 1, NULL, PRIORITY_LOW, NULL);
   sj2_cli__init();
