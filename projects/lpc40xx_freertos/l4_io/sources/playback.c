@@ -37,13 +37,11 @@ void volumeUp() {
     uint8_t currentVolumeLeft = (SCI_32byte_read(CS, DCS, 0xb) >> 8);
     uint8_t currentVolumeRight = (0xFF & SCI_32byte_read(CS, DCS, 0xb));
     uint16_t currentVolume = volumeCombine(currentVolumeLeft, currentVolumeRight);
-    printf("current volume is %x \n", currentVolume);
     if (currentVolume != maxVolume) {
-      printf("volume step size is %x \n", volumeStepSize);
       currentVolumeLeft -= volumeStepSize;
       currentVolumeRight -= volumeStepSize;
       currentVolume = volumeCombine(currentVolumeLeft, currentVolumeRight);
-      printf("volume is now %x \n", currentVolume);
+      printf("volume up! %04x \n", currentVolume);
       SCI_32byte_write(CS, DCS, 0xb, currentVolume);
     }
   }
@@ -59,7 +57,7 @@ void volumeDown() {
       currentVolumeLeft += volumeStepSize;
       currentVolumeRight += volumeStepSize;
       currentVolume = volumeCombine(currentVolumeLeft, currentVolumeRight);
-      printf("volume down! %x \n", currentVolume);
+      printf("volume down! %04x \n", currentVolume);
       SCI_32byte_write(CS, DCS, 0xb, currentVolume);
     }
   }
