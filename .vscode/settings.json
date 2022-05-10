@@ -57,6 +57,8 @@
         "ssp0lab.h": "c",
         "lpc_peripherals.h": "c",
         "optional": "c",
-        "random": "c"
+        "random": "c",
+        "playback.h": "c",
+        "uart.h": "c"
     }
 }
