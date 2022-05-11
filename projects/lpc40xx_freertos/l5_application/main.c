@@ -7,6 +7,7 @@
 #include "playback.h"
 #include "queue.h"
 #include "sj2_cli.h"
+#include "songList.h"
 #include "ssp0lab.h"
 #include "uart.h"
 #include <stdbool.h>
@@ -21,7 +22,8 @@ gpio_s pauseAndPlay = {GPIO__PORT_0, 30};
 
 static QueueHandle_t mp3_data_transfer_queue;
 QueueHandle_t songname_queue;
-static QueueHandle_t pause_play_queue;
+
+SemaphoreHandle_t pauseOrPlay;
 
 typedef struct {
   uint8_t data[512]; // Align data size to the way data is read from the SD card
@@ -31,6 +33,9 @@ typedef struct {
   char songname[64];
 } songname_s;
 
+static song_memory_t list_of_songs[32];
+static size_t number_of_songs;
+// -----------------------MP3 Tasks -------------------------------
 static void play_file(FIL *fil_handle) {
 
   UINT br, bw;
@@ -85,17 +90,24 @@ static void mp3_data_transfer_task(void *parameter) {
     }
   }
 }
-
+// -----------------------MP3 Tasks End -------------------------------
 int main(void) {
-
+  // initiazlize queues
   mp3_data_transfer_queue = xQueueCreate(2, sizeof(mp3_data_blocks_s));
   songname_queue = xQueueCreate(1, sizeof(songname_s));
+
+  // initialize drivers
   ssp0initialize(1);
   playbackInit(CS, DCS);
   mp3_decoder_ssp_init(CS, DCS, DREQ, RESET);
-  // xTaskCreate(cpu_utilization_print_task, "cpu", 1, NULL, PRIORITY_LOW, NULL);
   sj2_cli__init();
 
+#if 0
+    // use to view cpu usage
+   xTaskCreate(cpu_utilization_print_task, "cpu", 1, NULL, PRIORITY_LOW, NULL);
+#endif
+
+  // uart stuff , will clean later
   gpio_s tx2 = gpio__construct_as_output(GPIO__PORT_2, 8);
   gpio__set_function(tx2, GPIO__FUNCTION_2);
   const uint32_t peripheral_clock = 96 * 1000 * 1000;
@@ -116,11 +128,12 @@ int main(void) {
   uart__polled_put(UART__2, (int)'l');
   uart__polled_put(UART__2, (int)'p');
 
+  // tasks
   xTaskCreate(mp3_file_reader_task, "reader", 2000 / sizeof(void *), NULL, PRIORITY_LOW, NULL);
   xTaskCreate(mp3_data_transfer_task, "player", 2000 / sizeof(void *), NULL, PRIORITY_MEDIUM, NULL);
+  song_list__populate();
 
   puts("Starting FreeRTOS Scheduler ..... \r\n");
   vTaskStartScheduler();
-
   return 0;
 }
