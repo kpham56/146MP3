@@ -21,7 +21,8 @@ gpio_s pauseAndPlay = {GPIO__PORT_0, 30};
 
 static QueueHandle_t mp3_data_transfer_queue;
 QueueHandle_t songname_queue;
-static QueueHandle_t pause_play_queue;
+
+SemaphoreHandle_t pauseOrPlay;
 
 typedef struct {
   uint8_t data[512]; // Align data size to the way data is read from the SD card
@@ -90,31 +91,35 @@ int main(void) {
 
   mp3_data_transfer_queue = xQueueCreate(2, sizeof(mp3_data_blocks_s));
   songname_queue = xQueueCreate(1, sizeof(songname_s));
+  pauseOrPlay = xSemaphoreCreateBinary();
+  // initialization
   ssp0initialize(1);
+  ssp1initialize(1);
   playbackInit(CS, DCS);
   mp3_decoder_ssp_init(CS, DCS, DREQ, RESET);
-  // xTaskCreate(cpu_utilization_print_task, "cpu", 1, NULL, PRIORITY_LOW, NULL);
   sj2_cli__init();
+  // xTaskCreate(cpu_utilization_print_task, "cpu", 1, NULL, PRIORITY_LOW, NULL);
 
-  gpio_s tx2 = gpio__construct_as_output(GPIO__PORT_2, 8);
-  gpio__set_function(tx2, GPIO__FUNCTION_2);
-  const uint32_t peripheral_clock = 96 * 1000 * 1000;
-  const uint32_t requested_baud_rate = 9600;
-  uart__init(UART__2, peripheral_clock, requested_baud_rate);
-  delay__ms(10);
-  uart__polled_put(UART__2, 0b1100111000); // 8 bit, 2 line
-  delay__ms(10);
-  uart__polled_put(UART__2, 0b0000001110); // display on and cursor
-  delay__ms(10);
-  uart__polled_put(UART__2, 0b0000000110); // set mode to increment
-  delay__ms(10);
-  uart__polled_put(UART__2, 0b0000000001); // clear?
-  delay__ms(10);
-  uart__polled_put(UART__2, 0b1000000001); // clear?
-  uart__polled_put(UART__2, (int)'h');
-  uart__polled_put(UART__2, (int)'e');
-  uart__polled_put(UART__2, (int)'l');
-  uart__polled_put(UART__2, (int)'p');
+  // spi screen stuff
+
+  gpio_s ssel = gpio__construct_as_output(GPIO__PORT_0, 6);
+  gpio_s clk = gpio__construct_as_output(GPIO__PORT_0, 7);
+  gpio_s miso = gpio__construct_as_input(GPIO__PORT_0, 8);
+  gpio_s mosi = gpio__construct_as_output(GPIO__PORT_0, 9);
+  gpio__set_function(ssel, GPIO__FUNCTION_2);
+  gpio__set_function(clk, GPIO__FUNCTION_2);
+  gpio__set_function(miso, GPIO__FUNCTION_2);
+  gpio__set_function(mosi, GPIO__FUNCTION_2);
+
+  gpio__set(ssel); // cs is high
+
+  ssp1lab__exchange_byte(0b0000111000); // 8 bit 2 line mode
+  ssp1lab__exchange_byte(0b0000001110); // turn on display and cursor
+  ssp1lab__exchange_byte(0b0000000110); // entry mode set
+  ssp1lab__exchange_byte(0b1001001000); // h?
+  ssp1lab__exchange_byte('e');
+  ssp1lab__exchange_byte('l');
+  ssp1lab__exchange_byte('p');
 
   xTaskCreate(mp3_file_reader_task, "reader", 2000 / sizeof(void *), NULL, PRIORITY_LOW, NULL);
   xTaskCreate(mp3_data_transfer_task, "player", 2000 / sizeof(void *), NULL, PRIORITY_MEDIUM, NULL);
