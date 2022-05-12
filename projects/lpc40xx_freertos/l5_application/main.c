@@ -99,9 +99,11 @@ int main(void) {
 
   // initialize drivers
   ssp0initialize(1);
+  ssp1initialize(1);
   playbackInit(CS, DCS);
   mp3_decoder_ssp_init(CS, DCS, DREQ, RESET);
   sj2_cli__init();
+  // xTaskCreate(cpu_utilization_print_task, "cpu", 1, NULL, PRIORITY_LOW, NULL);
 
 #if 0
   // use to view cpu usage
