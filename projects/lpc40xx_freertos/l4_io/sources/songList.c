@@ -65,7 +65,7 @@ const char *song_list__get_name_for_item(size_t item_number) {
   return return_pointer;
 }
 
-void printSongs(void) {
+void printAllSongs(void) {
   int amtOfSongs = song_list__get_item_count();
   printf("This SD card contains the following songs\n");
   for (int i = 0; i < amtOfSongs; i++) {

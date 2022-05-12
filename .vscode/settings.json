@@ -59,6 +59,7 @@
         "optional": "c",
         "random": "c",
         "playback.h": "c",
-        "uart.h": "c"
+        "uart.h": "c",
+        "delay.h": "c"
     }
 }

@@ -1,7 +1,9 @@
 #include "app_cli.h"
 #include "cli_handlers.h"
+#include "delay.h"
 #include "ff.h"
 #include "l3_drivers\gpio.h"
+#include "lcd.h"
 #include "mp3Functions.h"
 #include "peripherals_init.h"
 #include "playback.h"
@@ -11,9 +13,7 @@
 #include "ssp0lab.h"
 #include "task.h"
 #include "uart.h"
-#include <stdbool.h>
 #include <stdio.h>
-#include <string.h>
 
 gpio_s CS = {GPIO__PORT_2, 0};
 gpio_s DCS = {GPIO__PORT_2, 1};
@@ -99,43 +99,30 @@ int main(void) {
 
   // initialize drivers
   ssp0initialize(1);
-  ssp1initialize(1);
   playbackInit(CS, DCS);
   mp3_decoder_ssp_init(CS, DCS, DREQ, RESET);
   sj2_cli__init();
+  lcdInit();
   // xTaskCreate(cpu_utilization_print_task, "cpu", 1, NULL, PRIORITY_LOW, NULL);
 
 #if 0
   // use to view cpu usage
   xTaskCreate(cpu_utilization_print_task, "cpu", 1, NULL, PRIORITY_LOW, NULL);
 #endif
-
-  // uart stuff , will clean later
-  gpio_s tx2 = gpio__construct_as_output(GPIO__PORT_2, 8);
-  gpio__set_function(tx2, GPIO__FUNCTION_2);
-  const uint32_t peripheral_clock = 96 * 1000 * 1000;
-  const uint32_t requested_baud_rate = 9600;
-  uart__init(UART__2, peripheral_clock, requested_baud_rate);
-  delay__ms(10);
-  uart__polled_put(UART__2, 0b1100111000); // 8 bit, 2 line
-  delay__ms(10);
-  uart__polled_put(UART__2, 0b0000001110); // display on and cursor
-  delay__ms(10);
-  uart__polled_put(UART__2, 0b0000000110); // set mode to increment
-  delay__ms(10);
-  uart__polled_put(UART__2, 0b0000000001); // clear?
-  delay__ms(10);
-  uart__polled_put(UART__2, 0b1000000001); // clear?
-  uart__polled_put(UART__2, (int)'h');
-  uart__polled_put(UART__2, (int)'e');
-  uart__polled_put(UART__2, (int)'l');
-  uart__polled_put(UART__2, (int)'p');
+  sendToScreen('h');
+  sendToScreen('e');
+  sendToScreen('l');
+  sendToScreen('p');
+  clearScreen();
+  delay__ms(1000);
 
   // tasks
   xTaskCreate(mp3_file_reader_task, "reader", 2000 / sizeof(void *), NULL, PRIORITY_LOW, NULL);
   xTaskCreate(mp3_data_transfer_task, "player", 2000 / sizeof(void *), NULL, PRIORITY_MEDIUM, NULL);
   song_list__populate();
-  printSongs();
+  printAllSongs();
+  printf(song_list__get_name_for_item(1));
+  sendSong(1);
 
   puts("Starting FreeRTOS Scheduler ..... \r\n");
   vTaskStartScheduler();

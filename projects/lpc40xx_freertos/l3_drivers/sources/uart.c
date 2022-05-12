@@ -256,7 +256,7 @@ bool uart__polled_get(uart_e uart, char *input_byte) {
   return status;
 }
 
-bool uart__polled_put(uart_e uart, uint16_t output_byte) {
+bool uart__polled_put(uart_e uart, uint8_t output_byte) {
   bool status = false;
   lpc_uart *uart_regs = uarts[uart].registers;
 
