@@ -9,6 +9,7 @@
 #include "sj2_cli.h"
 #include "songList.h"
 #include "ssp0lab.h"
+#include "task.h"
 #include "uart.h"
 #include <stdbool.h>
 #include <stdio.h>
@@ -103,8 +104,8 @@ int main(void) {
   sj2_cli__init();
 
 #if 0
-    // use to view cpu usage
-   xTaskCreate(cpu_utilization_print_task, "cpu", 1, NULL, PRIORITY_LOW, NULL);
+  // use to view cpu usage
+  xTaskCreate(cpu_utilization_print_task, "cpu", 1, NULL, PRIORITY_LOW, NULL);
 #endif
 
   // uart stuff , will clean later
@@ -132,6 +133,7 @@ int main(void) {
   xTaskCreate(mp3_file_reader_task, "reader", 2000 / sizeof(void *), NULL, PRIORITY_LOW, NULL);
   xTaskCreate(mp3_data_transfer_task, "player", 2000 / sizeof(void *), NULL, PRIORITY_MEDIUM, NULL);
   song_list__populate();
+  printSongs();
 
   puts("Starting FreeRTOS Scheduler ..... \r\n");
   vTaskStartScheduler();

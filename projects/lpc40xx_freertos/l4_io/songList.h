@@ -13,3 +13,4 @@ static size_t number_of_songs;
 void song_list__populate(void);
 size_t song_list__get_item_count(void);
 const char *song_list__get_name_for_item(size_t item_number);
+void printSongs(void);
