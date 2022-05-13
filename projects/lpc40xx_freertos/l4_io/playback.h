@@ -3,11 +3,10 @@
 #include <stdint.h>
 #include <stdio.h>
 
-void playbackInit(gpio_s volumeUpButton, gpio_s volumeDownButton, gpio_s CSpin, gpio_s DCSpin);
+void playbackInit(gpio_s volumeUpButton, gpio_s volumeDownButton, gpio_s pauseAndPlayButton, gpio_s CSpin,
+                  gpio_s DCSpin);
 
-void pauseMusic(gpio_s button);
-
-void playMusic(gpio_s button);
+bool pauseAndPlayMusic(gpio_s button);
 
 void nextSong(gpio_s button);
 

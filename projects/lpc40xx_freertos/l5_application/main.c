@@ -19,12 +19,13 @@ gpio_s CS = {GPIO__PORT_2, 0};
 gpio_s DCS = {GPIO__PORT_2, 1};
 gpio_s RESET = {GPIO__PORT_2, 2};
 gpio_s DREQ = {GPIO__PORT_2, 5};
-gpio_s pauseAndPlay = {GPIO__PORT_0, 30};
+gpio_s pauseAndPlayButton = {GPIO__PORT_1, 28};
 gpio_s volumeUpButton = {GPIO__PORT_0, 6};
 gpio_s volumeDownButton = {GPIO__PORT_0, 7};
-
 static QueueHandle_t mp3_data_transfer_queue;
 QueueHandle_t songname_queue;
+
+static void mp3_data_transfer_task(void *parameter);
 
 typedef struct {
   uint8_t data[512]; // Align data size to the way data is read from the SD card
@@ -50,6 +51,14 @@ static void play_file(FIL *fil_handle) {
     }
   }
 }
+static void wakeUpTask(void *parameter) {
+  while (1) {
+    TaskHandle_t task_handle = xTaskGetHandle("player");
+    if (gpio__get(pauseAndPlayButton)) {
+      vTaskResume(task_handle);
+    }
+  }
+}
 
 static void mp3_file_reader_task(void *parameter) {
   songname_s filename_to_play = {};
@@ -67,6 +76,7 @@ static void mp3_file_reader_task(void *parameter) {
       printf("Unable to open and read file: %s\n", filename_to_play.songname);
       vTaskDelay(1000);
     }
+    printf(" made it to the end of reader task\n");
   }
 }
 
@@ -82,15 +92,22 @@ static void transfer_data_block(mp3_data_blocks_s *mp3_playback_buffer) {
 static void mp3_data_transfer_task(void *parameter) {
   mp3_data_blocks_s mp3_playback_buffer;
   ssp0lab__exchange_byte(0x2);
+  TaskHandle_t task_handle = xTaskGetHandle("player");
   while (1) {
     volumeUp(volumeUpButton);
     volumeDown(volumeDownButton);
+
+    if (gpio__get(pauseAndPlayButton)) {
+      vTaskSuspend(task_handle);
+      printf("suspend me pls");
+    }
     // printf("reading from 0x0b volume %04X \n", SCI_32byte_read(CS, DCS, 0xb));
     if (xQueueReceive(mp3_data_transfer_queue, &mp3_playback_buffer, portMAX_DELAY)) {
       transfer_data_block(&mp3_playback_buffer);
     }
   }
 }
+
 // -----------------------MP3 Tasks End -------------------------------
 int main(void) {
   // initiazlize queues
@@ -99,7 +116,7 @@ int main(void) {
 
   // initialize drivers
   ssp0initialize(1);
-  playbackInit(volumeUpButton, volumeDownButton, CS, DCS);
+  playbackInit(volumeUpButton, volumeDownButton, pauseAndPlayButton, CS, DCS);
   mp3_decoder_ssp_init(CS, DCS, DREQ, RESET);
   sj2_cli__init();
   lcdInit();
@@ -118,8 +135,9 @@ int main(void) {
   delay__ms(1000);
 
   // tasks
-  xTaskCreate(mp3_file_reader_task, "reader", 2000 / sizeof(void *), NULL, PRIORITY_LOW, NULL);
-  xTaskCreate(mp3_data_transfer_task, "player", 2000 / sizeof(void *), NULL, PRIORITY_MEDIUM, NULL);
+  xTaskCreate(mp3_file_reader_task, "reader", 2000 / sizeof(void *), NULL, PRIORITY_MEDIUM, NULL);
+  xTaskCreate(mp3_data_transfer_task, "player", 2000 / sizeof(void *), NULL, PRIORITY_HIGH, NULL);
+  xTaskCreate(wakeUpTask, "wakeup", 2000 / sizeof(void *), NULL, PRIORITY_LOW, NULL);
   song_list__populate();
   printAllSongs();
   sendSongToScreen(0);

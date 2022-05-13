@@ -10,8 +10,10 @@ uint8_t musicControl = 0;
 uint8_t modeAddress = 0x0;
 gpio_s CS;
 gpio_s DCS;
+bool pauseAndPlayflag = false;
 
-void playbackInit(gpio_s volumeUpButton, gpio_s volumeDownButton, gpio_s CSpin, gpio_s DCSpin) {
+void playbackInit(gpio_s volumeUpButton, gpio_s volumeDownButton, gpio_s pauseAndPlayButton, gpio_s CSpin,
+                  gpio_s DCSpin) {
   CS = CSpin;
   DCS = DCSpin;
   SCI_32byte_write(CSpin, DCSpin, 0xb, volumeStepSize);
@@ -20,11 +22,22 @@ void playbackInit(gpio_s volumeUpButton, gpio_s volumeDownButton, gpio_s CSpin, 
   gpio__enable_pull_down_resistors(volumeUpButton);
   gpio__set_as_input(volumeDownButton);
   gpio__enable_pull_down_resistors(volumeDownButton);
+  gpio__set_as_input(pauseAndPlayButton);
+  gpio__enable_pull_down_resistors(pauseAndPlayButton);
 }
 
-void pauseMusic(gpio_s button) {}
+bool pauseAndPlayMusic(gpio_s button) {
 
-void playMusic(gpio_s button) {}
+  if (gpio__get(button)) {
+    if (pauseAndPlayflag) {
+      pauseAndPlayflag = false;
+    } else {
+      pauseAndPlayflag = true;
+    }
+  }
+
+  return pauseAndPlayflag;
+}
 
 void nextSong(gpio_s button) {}
 
