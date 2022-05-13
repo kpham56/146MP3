@@ -4,4 +4,4 @@
 void lcdInit(void);
 void sendToScreen(uint8_t data);
 void clearScreen(void);
-void sendSong(uint8_t);
+void sendSongToScreen(uint8_t songNumber);

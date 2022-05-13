@@ -1,4 +1,4 @@
-#include "gpio.h"
+#include "l3_drivers\gpio.h"
 #include <stdint.h>
 #include <stdio.h>
 
@@ -10,16 +10,16 @@ uint8_t musicControl = 0;
 uint8_t modeAddress = 0x0;
 gpio_s CS;
 gpio_s DCS;
-gpio_s volumeUpButton = {GPIO__PORT_1, 19};
-gpio_s volumeDownButton = {GPIO__PORT_1, 15};
 
-void playbackInit(gpio_s CSpin, gpio_s DCSpin) {
+void playbackInit(gpio_s volumeUpButton, gpio_s volumeDownButton, gpio_s CSpin, gpio_s DCSpin) {
   CS = CSpin;
   DCS = DCSpin;
   SCI_32byte_write(CSpin, DCSpin, 0xb, volumeStepSize);
 
   gpio__set_as_input(volumeUpButton);
+  gpio__enable_pull_down_resistors(volumeUpButton);
   gpio__set_as_input(volumeDownButton);
+  gpio__enable_pull_down_resistors(volumeDownButton);
 }
 
 void pauseMusic(gpio_s button) {}
@@ -32,7 +32,7 @@ void previousSong(gpio_s button) {}
 
 uint16_t volumeCombine(uint8_t volumeLeft, uint8_t volumeRight) { return ((volumeLeft << 8) | volumeRight); }
 
-void volumeUp() {
+void volumeUp(gpio_s volumeUpButton) {
   if (gpio__get(volumeUpButton)) {
     uint8_t currentVolumeLeft = (SCI_32byte_read(CS, DCS, 0xb) >> 8);
     uint8_t currentVolumeRight = (0xFF & SCI_32byte_read(CS, DCS, 0xb));
@@ -47,7 +47,7 @@ void volumeUp() {
   }
 }
 
-void volumeDown() {
+void volumeDown(gpio_s volumeDownButton) {
   // uint16_t volumeStepSize = maxVolume / volumeSteps;
   if (gpio__get(volumeDownButton)) {
     uint8_t currentVolumeLeft = (SCI_32byte_read(CS, DCS, 0xb) >> 8);

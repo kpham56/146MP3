@@ -20,11 +20,11 @@ gpio_s DCS = {GPIO__PORT_2, 1};
 gpio_s RESET = {GPIO__PORT_2, 2};
 gpio_s DREQ = {GPIO__PORT_2, 5};
 gpio_s pauseAndPlay = {GPIO__PORT_0, 30};
+gpio_s volumeUpButton = {GPIO__PORT_0, 6};
+gpio_s volumeDownButton = {GPIO__PORT_0, 7};
 
 static QueueHandle_t mp3_data_transfer_queue;
 QueueHandle_t songname_queue;
-
-SemaphoreHandle_t pauseOrPlay;
 
 typedef struct {
   uint8_t data[512]; // Align data size to the way data is read from the SD card
@@ -34,12 +34,12 @@ typedef struct {
   char songname[64];
 } songname_s;
 
-static song_memory_t list_of_songs[32];
-static size_t number_of_songs;
+// static song_memory_t list_of_songs[32];
+// static size_t number_of_songs;
 // -----------------------MP3 Tasks -------------------------------
 static void play_file(FIL *fil_handle) {
 
-  UINT br, bw;
+  UINT br;
   mp3_data_blocks_s buffer;
 
   while (f_read(fil_handle, buffer.data, 512, &br) == FR_OK) {
@@ -83,8 +83,8 @@ static void mp3_data_transfer_task(void *parameter) {
   mp3_data_blocks_s mp3_playback_buffer;
   ssp0lab__exchange_byte(0x2);
   while (1) {
-    volumeUp();
-    volumeDown();
+    volumeUp(volumeUpButton);
+    volumeDown(volumeDownButton);
     // printf("reading from 0x0b volume %04X \n", SCI_32byte_read(CS, DCS, 0xb));
     if (xQueueReceive(mp3_data_transfer_queue, &mp3_playback_buffer, portMAX_DELAY)) {
       transfer_data_block(&mp3_playback_buffer);
@@ -99,20 +99,21 @@ int main(void) {
 
   // initialize drivers
   ssp0initialize(1);
-  playbackInit(CS, DCS);
+  playbackInit(volumeUpButton, volumeDownButton, CS, DCS);
   mp3_decoder_ssp_init(CS, DCS, DREQ, RESET);
   sj2_cli__init();
   lcdInit();
-  // xTaskCreate(cpu_utilization_print_task, "cpu", 1, NULL, PRIORITY_LOW, NULL);
 
 #if 0
   // use to view cpu usage
   xTaskCreate(cpu_utilization_print_task, "cpu", 1, NULL, PRIORITY_LOW, NULL);
 #endif
+
   sendToScreen('h');
   sendToScreen('e');
   sendToScreen('l');
   sendToScreen('p');
+  delay__ms(500);
   clearScreen();
   delay__ms(1000);
 
@@ -121,8 +122,7 @@ int main(void) {
   xTaskCreate(mp3_data_transfer_task, "player", 2000 / sizeof(void *), NULL, PRIORITY_MEDIUM, NULL);
   song_list__populate();
   printAllSongs();
-  printf(song_list__get_name_for_item(1));
-  sendSong(1);
+  sendSongToScreen(0);
 
   puts("Starting FreeRTOS Scheduler ..... \r\n");
   vTaskStartScheduler();

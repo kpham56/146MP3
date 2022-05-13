@@ -24,13 +24,13 @@ void clearScreen() {
   sendToScreen(45);  // clear screen
 }
 
-void sendSong(uint8_t songNumber) {
+void sendSongToScreen(uint8_t songNumber) {
   const char *return_pointer = "";
+  uint8_t removeMp3 = 4;
   return_pointer = song_list__get_name_for_item(songNumber);
   printf("\n%s this is the return pointer", return_pointer);
-  uint32_t wordLength = strlen(return_pointer);
+  uint32_t wordLength = strlen(return_pointer) - removeMp3;
   for (int i = 0; i < wordLength; i++) {
-    printf("%i\n", i);
     sendToScreen(return_pointer[i]);
   }
 }

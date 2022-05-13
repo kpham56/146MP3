@@ -60,6 +60,7 @@
         "random": "c",
         "playback.h": "c",
         "uart.h": "c",
-        "delay.h": "c"
+        "delay.h": "c",
+        "cpu_utilization_task.h": "c"
     }
 }
