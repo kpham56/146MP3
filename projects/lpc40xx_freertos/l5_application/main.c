@@ -19,9 +19,10 @@ gpio_s CS = {GPIO__PORT_2, 0};
 gpio_s DCS = {GPIO__PORT_2, 1};
 gpio_s RESET = {GPIO__PORT_2, 2};
 gpio_s DREQ = {GPIO__PORT_2, 5};
-gpio_s pauseAndPlayButton = {GPIO__PORT_1, 28};
+gpio_s modeSwitchButton = {GPIO__PORT_1, 31};
 gpio_s volumeUpButton = {GPIO__PORT_0, 6};
 gpio_s volumeDownButton = {GPIO__PORT_0, 7};
+
 static QueueHandle_t mp3_data_transfer_queue;
 QueueHandle_t songname_queue;
 
@@ -51,14 +52,14 @@ static void play_file(FIL *fil_handle) {
     }
   }
 }
-static void wakeUpTask(void *parameter) {
-  while (1) {
-    TaskHandle_t task_handle = xTaskGetHandle("player");
-    if (gpio__get(pauseAndPlayButton)) {
-      vTaskResume(task_handle);
-    }
-  }
-}
+// static void wakeUpTask(void *parameter) {
+//   while (1) {
+//     TaskHandle_t task_handle = xTaskGetHandle("player");
+//     if (gpio__get(pauseAndPlayButton)) {
+//       vTaskResume(task_handle);
+//     }
+//   }
+// }
 
 static void mp3_file_reader_task(void *parameter) {
   songname_s filename_to_play = {};
@@ -96,11 +97,14 @@ static void mp3_data_transfer_task(void *parameter) {
   while (1) {
     volumeUp(volumeUpButton);
     volumeDown(volumeDownButton);
+    nextSong(volumeUpButton);
+    previousSong(volumeDownButton);
+    modeSwitch(modeSwitchButton);
 
-    if (gpio__get(pauseAndPlayButton)) {
-      vTaskSuspend(task_handle);
-      printf("suspend me pls");
-    }
+    // if (gpio__get(pauseAndPlayButton)) {
+    //   vTaskSuspend(task_handle);
+    //   printf("suspend me pls");
+    // }
     // printf("reading from 0x0b volume %04X \n", SCI_32byte_read(CS, DCS, 0xb));
     if (xQueueReceive(mp3_data_transfer_queue, &mp3_playback_buffer, portMAX_DELAY)) {
       transfer_data_block(&mp3_playback_buffer);
@@ -116,10 +120,12 @@ int main(void) {
 
   // initialize drivers
   ssp0initialize(1);
-  playbackInit(volumeUpButton, volumeDownButton, pauseAndPlayButton, CS, DCS);
   mp3_decoder_ssp_init(CS, DCS, DREQ, RESET);
   sj2_cli__init();
   lcdInit();
+  song_list__populate();
+  playbackInit(volumeUpButton, volumeDownButton, modeSwitchButton, CS, DCS);
+  printAllSongs();
 
 #if 0
   // use to view cpu usage
@@ -137,10 +143,7 @@ int main(void) {
   // tasks
   xTaskCreate(mp3_file_reader_task, "reader", 2000 / sizeof(void *), NULL, PRIORITY_MEDIUM, NULL);
   xTaskCreate(mp3_data_transfer_task, "player", 2000 / sizeof(void *), NULL, PRIORITY_HIGH, NULL);
-  xTaskCreate(wakeUpTask, "wakeup", 2000 / sizeof(void *), NULL, PRIORITY_LOW, NULL);
-  song_list__populate();
-  printAllSongs();
-  sendSongToScreen(0);
+  // xTaskCreate(wakeUpTask, "wakeup", 2000 / sizeof(void *), NULL, PRIORITY_LOW, NULL);
 
   puts("Starting FreeRTOS Scheduler ..... \r\n");
   vTaskStartScheduler();
