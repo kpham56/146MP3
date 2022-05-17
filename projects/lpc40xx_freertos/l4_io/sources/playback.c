@@ -4,10 +4,12 @@
 #include <stdint.h>
 #include <stdio.h>
 
-const uint16_t noVolume = 0xFEFE;
-const uint16_t maxVolume = 0x0000;
-const uint8_t volumeSteps = 100;
-uint16_t volumeStepSize = 0xFE / volumeSteps;
+const uint16_t noVolume = 0xC8CA;
+const uint16_t maxVolume = 0x0002;
+const uint8_t volumeStepsInit = 100;
+const uint16_t volumeStepSize = 0xFE / volumeStepsInit;
+uint8_t volumeSteps = 100;
+
 uint8_t musicControl = 0;
 uint8_t modeAddress = 0x0;
 gpio_s CS;
@@ -15,7 +17,7 @@ gpio_s DCS;
 
 uint16_t maxSongs = 0;
 uint16_t currentSong = 0;
-bool mode = false;
+bool mode = true;
 
 void playbackInit(gpio_s volumeUpButton, gpio_s volumeDownButton, gpio_s modeSwitchButton, gpio_s CSpin,
                   gpio_s DCSpin) {
@@ -35,34 +37,51 @@ void playbackInit(gpio_s volumeUpButton, gpio_s volumeDownButton, gpio_s modeSwi
 
 void nextSong(gpio_s button) {
   if (gpio__get(button) && !mode) {
+    delay__ms(100);
     printf("next song button pressed\n");
     printf("current song value is %i\n", currentSong);
-    if (currentSong != maxSongs) {
+    sendSongToScreen(currentSong);
+    if (currentSong != maxSongs - 1) {
       currentSong++;
-      sendSongToScreen(currentSong);
     }
   }
 }
 
 void previousSong(gpio_s button) {
   if (gpio__get(button) && !mode) {
+    delay__ms(100);
     printf("previous song button pressed\n");
     printf("current song value is %i\n", currentSong);
+    sendSongToScreen(currentSong);
     if (currentSong != 0) {
       currentSong--;
-      sendSongToScreen(currentSong);
     }
   }
 }
 
 uint16_t volumeCombine(uint8_t volumeLeft, uint8_t volumeRight) { return ((volumeLeft << 8) | volumeRight); }
 
-void volumeUp(gpio_s volumeUpButton) {
+uint8_t volumeUp(gpio_s volumeUpButton) {
+  uint8_t currentVolumeLeft = (SCI_32byte_read(CS, DCS, 0xb) >> 8);
+  uint8_t currentVolumeRight = (0xFF & SCI_32byte_read(CS, DCS, 0xb));
+  uint16_t currentVolume = volumeCombine(currentVolumeLeft, currentVolumeRight);
   if (gpio__get(volumeUpButton) && mode) {
-    uint8_t currentVolumeLeft = (SCI_32byte_read(CS, DCS, 0xb) >> 8);
-    uint8_t currentVolumeRight = (0xFF & SCI_32byte_read(CS, DCS, 0xb));
-    uint16_t currentVolume = volumeCombine(currentVolumeLeft, currentVolumeRight);
+
     if (currentVolume != maxVolume) {
+      volumeSteps++;
+      clearScreen();
+      sendToScreen('v');
+      sendToScreen('o');
+      sendToScreen('l');
+      uint8_t onesPos = volumeSteps % 10;
+      uint8_t tensPos = volumeSteps / 10;
+      if (tensPos == 10) {
+        tensPos = 0;
+      }
+      uint8_t hundredsPos = volumeSteps / 100;
+      sendToScreen('0' + hundredsPos);
+      sendToScreen('0' + tensPos);
+      sendToScreen('0' + onesPos);
       currentVolumeLeft -= volumeStepSize;
       currentVolumeRight -= volumeStepSize;
       currentVolume = volumeCombine(currentVolumeLeft, currentVolumeRight);
@@ -70,15 +89,31 @@ void volumeUp(gpio_s volumeUpButton) {
       SCI_32byte_write(CS, DCS, 0xb, currentVolume);
     }
   }
+  return volumeSteps;
 }
 
-void volumeDown(gpio_s volumeDownButton) {
+uint8_t volumeDown(gpio_s volumeDownButton) {
   // uint16_t volumeStepSize = maxVolume / volumeSteps;
+  uint8_t currentVolumeLeft = (SCI_32byte_read(CS, DCS, 0xb) >> 8);
+  uint8_t currentVolumeRight = (0xFF & SCI_32byte_read(CS, DCS, 0xb));
+  uint16_t currentVolume = volumeCombine(currentVolumeLeft, currentVolumeRight);
   if (gpio__get(volumeDownButton) && mode) {
-    uint8_t currentVolumeLeft = (SCI_32byte_read(CS, DCS, 0xb) >> 8);
-    uint8_t currentVolumeRight = (0xFF & SCI_32byte_read(CS, DCS, 0xb));
-    uint16_t currentVolume = volumeCombine(currentVolumeLeft, currentVolumeRight);
+
     if (currentVolume != noVolume) {
+      volumeSteps--;
+      clearScreen();
+      sendToScreen('v');
+      sendToScreen('o');
+      sendToScreen('l');
+      uint8_t onesPos = volumeSteps % 10;
+      uint8_t tensPos = volumeSteps / 10;
+      if (tensPos == 10) {
+        tensPos = 0;
+      }
+      uint8_t hundredsPos = volumeSteps / 100;
+      sendToScreen('0' + hundredsPos);
+      sendToScreen('0' + tensPos);
+      sendToScreen('0' + onesPos);
       currentVolumeLeft += volumeStepSize;
       currentVolumeRight += volumeStepSize;
       currentVolume = volumeCombine(currentVolumeLeft, currentVolumeRight);
@@ -86,16 +121,33 @@ void volumeDown(gpio_s volumeDownButton) {
       SCI_32byte_write(CS, DCS, 0xb, currentVolume);
     }
   }
+  return volumeSteps;
 }
 
 void modeSwitch(gpio_s button) {
   if (gpio__get(button)) {
-    printf("mode switch button pressed \n");
+    delay__ms(100);
+    printf("mode switch button pressed the mode is: %d \n", mode);
     mode = !mode;
     if (mode) {
       sendToScreen('1');
     } else {
-      sendToScreen('0');
+      sendToScreen('#');
     }
+  }
+}
+
+void displayStatus() {
+  sendSongToScreen(currentSong);
+  clearScreen();
+  sendToScreen('v');
+  sendToScreen('o');
+  sendToScreen('l');
+
+  // sendToScreen(vol);
+  if (mode) {
+    sendToScreen('1');
+  } else {
+    sendToScreen('0');
   }
 }

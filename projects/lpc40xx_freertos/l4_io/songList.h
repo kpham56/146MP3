@@ -1,5 +1,6 @@
 
 #pragma once
+#include <sl_string.h>
 #include <stddef.h> // size_t
 #include <stdint.h>
 #include <stdio.h>

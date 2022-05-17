@@ -15,3 +15,5 @@ void volumeUp(gpio_s volumeUpButton);
 void volumeDown(gpio_s volumeDownButton);
 
 void modeSwitch(gpio_s modeButton);
+
+void displayStatus();

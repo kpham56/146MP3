@@ -44,10 +44,12 @@ void mp3_decoder_ssp_init(gpio_s CSpin, gpio_s DCSpin, gpio_s DREQpin, gpio_s RE
   gpio__set(DCSpin); // sets dcs to HI
 
   SCI_32byte_write(CSpin, DCSpin, 0x03, 0x6000);
+#if 0
   printf("reading from 0x03 clock %x \n", SCI_32byte_read(CSpin, DCSpin, 0x03));
   printf("reading from 0x01 status %04X \n", SCI_32byte_read(CSpin, DCSpin, 0x01));
   printf("reading from 0x0b volume %04X \n", SCI_32byte_read(CSpin, DCSpin, 0xb));
   printf("reading from 0x00 mode %04X \n", SCI_32byte_read(CSpin, DCSpin, 0x0));
+#endif
 }
 
 void mp3_decoder_send_data_32_bytes(gpio_s CSpin, gpio_s DCSpin, uint8_t data) {

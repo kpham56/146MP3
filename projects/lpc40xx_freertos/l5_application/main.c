@@ -33,11 +33,9 @@ typedef struct {
 } mp3_data_blocks_s;
 
 typedef struct {
-  char songname[64];
+  char songname[128];
 } songname_s;
 
-// static song_memory_t list_of_songs[32];
-// static size_t number_of_songs;
 // -----------------------MP3 Tasks -------------------------------
 static void play_file(FIL *fil_handle) {
 
@@ -52,14 +50,6 @@ static void play_file(FIL *fil_handle) {
     }
   }
 }
-// static void wakeUpTask(void *parameter) {
-//   while (1) {
-//     TaskHandle_t task_handle = xTaskGetHandle("player");
-//     if (gpio__get(pauseAndPlayButton)) {
-//       vTaskResume(task_handle);
-//     }
-//   }
-// }
 
 static void mp3_file_reader_task(void *parameter) {
   songname_s filename_to_play = {};
@@ -67,7 +57,10 @@ static void mp3_file_reader_task(void *parameter) {
   while (1) {
     FIL file;
     FRESULT Res;
-    xQueueReceive(songname_queue, &filename_to_play, portMAX_DELAY);
+    if (xQueueReceive(songname_queue, &filename_to_play, portMAX_DELAY)) {
+      fprintf(stderr, " got the queue\n");
+      fprintf(stderr, " %s\n", filename_to_play.songname);
+    }
     Res = f_open(&file, filename_to_play.songname, (FA_READ | FA_OPEN_EXISTING));
 
     if (Res == FR_OK) {
@@ -94,6 +87,7 @@ static void mp3_data_transfer_task(void *parameter) {
   mp3_data_blocks_s mp3_playback_buffer;
   ssp0lab__exchange_byte(0x2);
   TaskHandle_t task_handle = xTaskGetHandle("player");
+  // uint8_t poll = 0;
   while (1) {
     volumeUp(volumeUpButton);
     volumeDown(volumeDownButton);
@@ -101,14 +95,35 @@ static void mp3_data_transfer_task(void *parameter) {
     previousSong(volumeDownButton);
     modeSwitch(modeSwitchButton);
 
+    // if (poll == 20) {
+    //   // displayStatus();
+    //   poll = 0;
+    // }
+    // poll++;
+
     // if (gpio__get(pauseAndPlayButton)) {
     //   vTaskSuspend(task_handle);
     //   printf("suspend me pls");
     // }
     // printf("reading from 0x0b volume %04X \n", SCI_32byte_read(CS, DCS, 0xb));
+
     if (xQueueReceive(mp3_data_transfer_queue, &mp3_playback_buffer, portMAX_DELAY)) {
       transfer_data_block(&mp3_playback_buffer);
     }
+  }
+}
+
+static void startupTask(void) {
+  TaskHandle_t task_handle = xTaskGetHandle("start");
+  while (1) {
+    songname_s firstSong = {};
+
+    const char *asdf = song_list__get_name_for_item(1);
+    char s[128];
+    memcpy(firstSong.songname, asdf, sizeof(firstSong));
+    // fprintf(stderr, " this is the firstsong.songname %s\n", firstSong.songname);
+    xQueueSend(songname_queue, &firstSong, portMAX_DELAY);
+    vTaskSuspend(task_handle);
   }
 }
 
@@ -141,11 +156,16 @@ int main(void) {
   delay__ms(1000);
 
   // tasks
+  const char *asdf = song_list__get_name_for_item(0);
+  printf("0. this is the song from song_list_get_name_for_item %s,\n", asdf);
+  printf("1. this is the song from song_list_get_name_for_item %s,\n", song_list__get_name_for_item(0));
+
   xTaskCreate(mp3_file_reader_task, "reader", 2000 / sizeof(void *), NULL, PRIORITY_MEDIUM, NULL);
   xTaskCreate(mp3_data_transfer_task, "player", 2000 / sizeof(void *), NULL, PRIORITY_HIGH, NULL);
-  // xTaskCreate(wakeUpTask, "wakeup", 2000 / sizeof(void *), NULL, PRIORITY_LOW, NULL);
+  xTaskCreate(startupTask, "start", 2000 / sizeof(void *), NULL, PRIORITY_CRITICAL, NULL);
 
   puts("Starting FreeRTOS Scheduler ..... \r\n");
   vTaskStartScheduler();
+
   return 0;
 }
