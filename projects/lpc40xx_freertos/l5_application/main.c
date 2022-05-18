@@ -22,7 +22,6 @@ gpio_s DREQ = {GPIO__PORT_2, 5};
 gpio_s modeSwitchButton = {GPIO__PORT_1, 31};
 gpio_s volumeUpButton = {GPIO__PORT_0, 6};
 gpio_s volumeDownButton = {GPIO__PORT_0, 7};
-gpio_s pausePlaySendButton = {GPIO__PORT_1, 20};
 
 static QueueHandle_t mp3_data_transfer_queue;
 QueueHandle_t songname_queue;
@@ -47,8 +46,6 @@ static void play_file(FIL *fil_handle) {
     xQueueSend(mp3_data_transfer_queue, &buffer, portMAX_DELAY);
 
     if (uxQueueMessagesWaiting(songname_queue) > 0) {
-      // fprintf(stderr, " skip current song\n");
-
       break;
     }
   }
@@ -60,23 +57,20 @@ static void mp3_file_reader_task(void *parameter) {
   while (1) {
     FIL file;
     FRESULT Res;
-    if (xQueueReceive(songname_queue, &filename_to_play, 1)) {
-      // fprintf(stderr, " got the queue\n");
-      // fprintf(stderr, " %s\n", filename_to_play.songname);
+    if (xQueueReceive(songname_queue, &filename_to_play, portMAX_DELAY)) {
+      fprintf(stderr, " got the queue\n");
+      fprintf(stderr, " %s\n", filename_to_play.songname);
     }
     Res = f_open(&file, filename_to_play.songname, (FA_READ | FA_OPEN_EXISTING));
 
     if (Res == FR_OK) {
-      // fprintf(stderr, " entered play_file\n");
       play_file(&file);
-      // fprintf(stderr, " finished play_file\n");
       f_close(&file);
-      // fprintf(stderr, " close file\n");
     } else {
-      // printf("Unable to open and read file: %s\n", filename_to_play.songname);
+      printf("Unable to open and read file: %s\n", filename_to_play.songname);
       vTaskDelay(1000);
     }
-    // printf(" made it to the end of reader task\n");
+    printf(" made it to the end of reader task\n");
   }
 }
 
@@ -93,13 +87,19 @@ static void mp3_data_transfer_task(void *parameter) {
   mp3_data_blocks_s mp3_playback_buffer;
   ssp0lab__exchange_byte(0x2);
   TaskHandle_t task_handle = xTaskGetHandle("player");
+  // uint8_t poll = 0;
   while (1) {
     volumeUp(volumeUpButton);
     volumeDown(volumeDownButton);
     nextSong(volumeUpButton);
     previousSong(volumeDownButton);
-    sendSong(pausePlaySendButton);
     modeSwitch(modeSwitchButton);
+
+    // if (poll == 20) {
+    //   // displayStatus();
+    //   poll = 0;
+    // }
+    // poll++;
 
     // if (gpio__get(pauseAndPlayButton)) {
     //   vTaskSuspend(task_handle);
@@ -107,7 +107,7 @@ static void mp3_data_transfer_task(void *parameter) {
     // }
     // printf("reading from 0x0b volume %04X \n", SCI_32byte_read(CS, DCS, 0xb));
 
-    if (xQueueReceive(mp3_data_transfer_queue, &mp3_playback_buffer, 1)) {
+    if (xQueueReceive(mp3_data_transfer_queue, &mp3_playback_buffer, portMAX_DELAY)) {
       transfer_data_block(&mp3_playback_buffer);
     }
   }
@@ -118,10 +118,9 @@ static void startupTask(void) {
   while (1) {
     songname_s firstSong = {};
 
-    const char *asdf = song_list__get_name_for_item(0);
+    const char *asdf = song_list__get_name_for_item(1);
     char s[128];
     memcpy(firstSong.songname, asdf, sizeof(firstSong));
-    sendSongToScreen(0);
     // fprintf(stderr, " this is the firstsong.songname %s\n", firstSong.songname);
     xQueueSend(songname_queue, &firstSong, portMAX_DELAY);
     vTaskSuspend(task_handle);
@@ -140,7 +139,7 @@ int main(void) {
   sj2_cli__init();
   lcdInit();
   song_list__populate();
-  playbackInit(volumeUpButton, volumeDownButton, modeSwitchButton, pausePlaySendButton, CS, DCS);
+  playbackInit(volumeUpButton, volumeDownButton, modeSwitchButton, CS, DCS);
   printAllSongs();
 
 #if 0
@@ -158,6 +157,8 @@ int main(void) {
 
   // tasks
   const char *asdf = song_list__get_name_for_item(0);
+  printf("0. this is the song from song_list_get_name_for_item %s,\n", asdf);
+  printf("1. this is the song from song_list_get_name_for_item %s,\n", song_list__get_name_for_item(0));
 
   xTaskCreate(mp3_file_reader_task, "reader", 2000 / sizeof(void *), NULL, PRIORITY_MEDIUM, NULL);
   xTaskCreate(mp3_data_transfer_task, "player", 2000 / sizeof(void *), NULL, PRIORITY_HIGH, NULL);
