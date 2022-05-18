@@ -143,9 +143,9 @@ void sendSong(gpio_s button) {
 
     memcpy(songToSend.songname, asdf, sizeof(songToSend));
     xQueueReset(songname_queue);
-
-    // fprintf(stderr, " this is the songToSend.songname %s\n", songToSend.songname);
-    xQueueSend(songname_queue, &songToSend, portMAX_DELAY);
+    delay__ms(50);
+    fprintf(stderr, " this is the songToSend.songname %s\n", songToSend.songname);
+    xQueueSend(songname_queue, &songToSend, 1000);
   }
 }
 void modeSwitch(gpio_s button) {
