@@ -2,6 +2,7 @@
 #include "l1_freertos\include\queue.h"
 #include "l3_drivers\gpio.h"
 #include "stdbool.h"
+#include "task.h"
 #include <lcd.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -12,7 +13,6 @@ const uint16_t maxVolume = 0x0002;
 const uint8_t volumeStepsInit = 100;
 const uint16_t volumeStepSize = 0xFE / volumeStepsInit;
 uint8_t volumeSteps = 100;
-
 uint8_t musicControl = 0;
 uint8_t modeAddress = 0x0;
 gpio_s CS;
@@ -20,7 +20,20 @@ gpio_s DCS;
 
 uint16_t maxSongs = 0;
 uint16_t currentSong = 0;
-bool mode = true;
+
+const uint8_t noBassTreble = 0x00;
+const uint8_t maxBassTreble = 0x0F;
+const uint8_t trebleBassSteps = 100;
+const uint8_t bass_trebleStepSize = 0xF / trebleBassSteps;
+
+uint16_t mode = 0;
+
+typedef enum {
+  Volume,
+  Bass,
+  Treble,
+  songSelection,
+};
 
 typedef struct {
   char songname[128];
@@ -46,8 +59,8 @@ void playbackInit(gpio_s volumeUpButton, gpio_s volumeDownButton, gpio_s modeSwi
 }
 
 void nextSong(gpio_s button) {
-  if (gpio__get(button) && !mode) {
-    // delay__ms(100);
+  if (gpio__get(button) && mode == songSelection) {
+    delay__ms(50);
     // printf("next song button pressed\n");
     if (currentSong != maxSongs - 1) {
       currentSong++;
@@ -58,8 +71,8 @@ void nextSong(gpio_s button) {
 }
 
 void previousSong(gpio_s button) {
-  if (gpio__get(button) && !mode) {
-    // delay__ms(100);
+  if (gpio__get(button) && mode == songSelection) {
+    delay__ms(50);
     // printf("previous song button pressed\n");
     if (currentSong != 0) {
       currentSong--;
@@ -75,7 +88,7 @@ uint8_t volumeUp(gpio_s volumeUpButton) {
   uint8_t currentVolumeLeft = (SCI_32byte_read(CS, DCS, 0xb) >> 8);
   uint8_t currentVolumeRight = (0xFF & SCI_32byte_read(CS, DCS, 0xb));
   uint16_t currentVolume = volumeCombine(currentVolumeLeft, currentVolumeRight);
-  if (gpio__get(volumeUpButton) && mode) {
+  if (gpio__get(volumeUpButton) && mode == Volume) {
 
     if (currentVolume != maxVolume) {
       volumeSteps++;
@@ -107,7 +120,7 @@ uint8_t volumeDown(gpio_s volumeDownButton) {
   uint8_t currentVolumeLeft = (SCI_32byte_read(CS, DCS, 0xb) >> 8);
   uint8_t currentVolumeRight = (0xFF & SCI_32byte_read(CS, DCS, 0xb));
   uint16_t currentVolume = volumeCombine(currentVolumeLeft, currentVolumeRight);
-  if (gpio__get(volumeDownButton) && mode) {
+  if (gpio__get(volumeDownButton) && mode == Volume) {
 
     if (currentVolume != noVolume) {
       volumeSteps--;
@@ -135,8 +148,8 @@ uint8_t volumeDown(gpio_s volumeDownButton) {
 }
 
 void sendSong(gpio_s button) {
-  if (gpio__get(button) && !mode) {
-    // delay__ms(100);
+  if (gpio__get(button) && mode == songSelection) {
+    delay__ms(100);
     songname_s songToSend = {};
     const char *asdf = song_list__get_name_for_item(currentSong);
     char s[128];
@@ -144,34 +157,115 @@ void sendSong(gpio_s button) {
     memcpy(songToSend.songname, asdf, sizeof(songToSend));
     xQueueReset(songname_queue);
     delay__ms(50);
-    fprintf(stderr, " this is the songToSend.songname %s\n", songToSend.songname);
+   // fprintf(stderr, " this is the songToSend.songname %s\n", songToSend.songname);
     xQueueSend(songname_queue, &songToSend, 1000);
   }
 }
 void modeSwitch(gpio_s button) {
   if (gpio__get(button)) {
-    // delay__ms(100);
-    // printf("mode switch button pressed the mode is: %d \n", mode);
-    mode = !mode;
-    if (mode) {
-      sendToScreen('1');
-    } else {
-      sendToScreen('#');
+    delay__ms(100);
+    printf("mode switch button pressed the mode is: %d \n", mode);
+    switch (mode) {
+    case Volume:
+      mode = Bass;
+      clearScreen();
+      sendToScreen('b');
+      sendToScreen('a');
+      sendToScreen('s');
+      sendToScreen('s');
+      break;
+    case Bass:
+      mode = Treble;
+      clearScreen();
+      sendToScreen('t');
+      sendToScreen('r');
+      sendToScreen('e');
+      sendToScreen('b');
+      sendToScreen('l');
+      sendToScreen('e');
+      break;
+    case Treble:
+      mode = songSelection;
+      clearScreen();
+      sendToScreen('s');
+      sendToScreen('o');
+      sendToScreen('n');
+      sendToScreen('g');
+      break;
+    case songSelection:
+      mode = Volume;
+      clearScreen();
+      sendToScreen('v');
+      sendToScreen('o');
+      sendToScreen('l');
+
+      break;
     }
   }
 }
 
-void displayStatus() {
-  sendSongToScreen(currentSong);
-  clearScreen();
-  sendToScreen('v');
-  sendToScreen('o');
-  sendToScreen('l');
+uint8_t trebleDown(gpio_s trebleDownButton) {
+  uint16_t registerValue = SCI_32byte_read(CS, DCS, 0x2);
+  uint8_t trebleLevel = (SCI_32byte_read(CS, DCS, 0x2) >> 12) & 0x0F;
+  uint16_t total = (trebleLevel << 12) | 0x0FFF;
+  if (gpio__get(trebleDownButton) && mode == Treble) {
+    if (trebleLevel != noBassTreble) {
+      trebleLevel -= bass_trebleStepSize;
+      SCI_32byte_write(CS, DCS, 0x2, trebleLevel);
+    }
+  }
+  return trebleLevel;
+}
 
-  // sendToScreen(vol);
-  if (mode) {
-    sendToScreen('1');
+uint8_t trebleUp(gpio_s trebleUpButton) {
+  uint16_t registerValue = SCI_32byte_read(CS, DCS, 0x2);
+  uint8_t trebleLevel = (SCI_32byte_read(CS, DCS, 0x2) >> 12) & 0x0F;
+  uint16_t total = (trebleLevel << 12) | 0x0FFF;
+  registerValue &= total;
+  if (gpio__get(trebleUpButton) && mode == Treble) {
+    if (trebleLevel != maxBassTreble) {
+      trebleLevel += bass_trebleStepSize;
+      SCI_32byte_write(CS, DCS, 0x2, registerValue);
+    }
+  }
+  return trebleLevel;
+}
+
+uint8_t bassUp(gpio_s bassUpButton) {
+  uint16_t registerValue = SCI_32byte_read(CS, DCS, 0x2);
+  uint8_t bassLevel = (SCI_32byte_read(CS, DCS, 0x2) >> 4) & 0x0F;
+  uint16_t total = (bassLevel << 4) | 0xFF0F;
+  bassLevel &= total;
+  if (gpio__get(bassUpButton) && mode == Bass) {
+    if (bassLevel != maxBassTreble) {
+      bassLevel += bass_trebleStepSize;
+      SCI_32byte_write(CS, DCS, 0x2, bassLevel);
+    }
+  }
+  return bassLevel;
+}
+
+uint8_t bassDown(gpio_s bassDownButton) {
+  uint16_t registerValue = SCI_32byte_read(CS, DCS, 0x2);
+  uint8_t bassLevel = (SCI_32byte_read(CS, DCS, 0x2) >> 4) & 0x0F;
+  uint16_t total = (bassLevel << 4) | 0xFF0F;
+  bassLevel &= total;
+  if (gpio__get(bassDownButton) && mode == Bass) {
+    if (bassLevel != noBassTreble) {
+      bassLevel -= bass_trebleStepSize;
+      SCI_32byte_write(CS, DCS, 0x2, bassLevel);
+    }
+  }
+  return bassLevel;
+}
+
+void pauseButton(gpio_s button) {
+  TaskHandle_t task_handle = xTaskGetHandle("player");
+  if (gpio__get(button) && mode == Volume) {
+    vTaskSuspend(task_handle);
   } else {
-    sendToScreen('0');
+    if (gpio__get(button)) {
+      vTaskResume(task_handle);
+    }
   }
 }

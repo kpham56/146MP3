@@ -16,6 +16,14 @@ void volumeUp(gpio_s volumeUpButton);
 
 void volumeDown(gpio_s volumeDownButton);
 
+void trebleUp(gpio_s button);
+
+void trebleDown(gpio_s button);
+
+void bassUp(gpio_s button);
+
+void bassDown(gpio_s button);
+
 void modeSwitch(gpio_s modeButton);
 
-void displayStatus();
+void pauseButton(gpio_s button);
