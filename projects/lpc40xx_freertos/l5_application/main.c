@@ -101,10 +101,10 @@ static void mp3_data_transfer_task(void *parameter) {
     nextSong(volumeUpButton);
     previousSong(volumeDownButton);
     sendSong(pausePlaySendButton);
-    bassDown(volumeUpButton);
-    bassUp(volumeDownButton);
-    trebleDown(volumeUpButton);
-    trebleUp(volumeDownButton);
+    bassDown(volumeDownButton);
+    bassUp(volumeUpButton);
+    trebleDown(volumeDownButton);
+    trebleUp(volumeUpButton);
     modeSwitch(modeSwitchButton);
     pauseButton(pausePlaySendButton);
 
@@ -138,6 +138,7 @@ static void startupTask(void) {
 
 static void unpause(void) {
   while (1) {
+    vTaskDelay(100);
     pauseButton(pausePlaySendButton);
   }
 }
@@ -171,7 +172,6 @@ int main(void) {
   delay__ms(1000);
 
   // tasks
-  const char *asdf = song_list__get_name_for_item(0);
 
   xTaskCreate(mp3_file_reader_task, "reader", 2000 / sizeof(void *), NULL, PRIORITY_MEDIUM, NULL);
   xTaskCreate(mp3_data_transfer_task, "player", 2000 / sizeof(void *), NULL, PRIORITY_HIGH, NULL);
