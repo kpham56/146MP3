@@ -23,8 +23,10 @@ uint16_t currentSong = 0;
 
 const uint8_t noBassTreble = 0x00;
 const uint8_t maxBassTreble = 0x0F;
-const uint8_t trebleBassSteps = 100;
-const uint8_t bass_trebleStepSize = 0xF / trebleBassSteps;
+const uint8_t trebleBassStepsInit = 100;
+const uint8_t bass_trebleStepSize = 0xF / trebleBassStepsInit;
+uint8_t bassSteps = 100;
+uint8_t trebleSteps = 100;
 
 uint16_t mode = 0;
 
@@ -157,7 +159,7 @@ void sendSong(gpio_s button) {
     memcpy(songToSend.songname, asdf, sizeof(songToSend));
     xQueueReset(songname_queue);
     delay__ms(50);
-   // fprintf(stderr, " this is the songToSend.songname %s\n", songToSend.songname);
+    // fprintf(stderr, " this is the songToSend.songname %s\n", songToSend.songname);
     xQueueSend(songname_queue, &songToSend, 1000);
   }
 }
@@ -206,11 +208,28 @@ void modeSwitch(gpio_s button) {
 
 uint8_t trebleDown(gpio_s trebleDownButton) {
   uint16_t registerValue = SCI_32byte_read(CS, DCS, 0x2);
-  uint8_t trebleLevel = (SCI_32byte_read(CS, DCS, 0x2) >> 12) & 0x0F;
+  uint8_t trebleLevel = (SCI_32byte_read(CS, DCS, 0x2) >> 12) & 0x000F;
   uint16_t total = (trebleLevel << 12) | 0x0FFF;
   if (gpio__get(trebleDownButton) && mode == Treble) {
     if (trebleLevel != noBassTreble) {
-      trebleLevel -= bass_trebleStepSize;
+      trebleSteps--;
+      clearScreen();
+      sendToScreen('t');
+      sendToScreen('r');
+      sendToScreen('e');
+      sendToScreen('b');
+      sendToScreen('l');
+      sendToScreen('e');
+      uint8_t onesPos = trebleSteps % 10;
+      uint8_t tensPos = trebleSteps / 10;
+      if (tensPos == 10) {
+        tensPos = 0;
+      }
+      uint8_t hundredsPos = trebleSteps / 100;
+      sendToScreen('0' + hundredsPos);
+      sendToScreen('0' + tensPos);
+      sendToScreen('0' + onesPos);
+      trebleLevel -= trebleSteps;
       SCI_32byte_write(CS, DCS, 0x2, trebleLevel);
     }
   }
@@ -224,12 +243,57 @@ uint8_t trebleUp(gpio_s trebleUpButton) {
   registerValue &= total;
   if (gpio__get(trebleUpButton) && mode == Treble) {
     if (trebleLevel != maxBassTreble) {
+      trebleSteps--;
+      clearScreen();
+      sendToScreen('t');
+      sendToScreen('r');
+      sendToScreen('e');
+      sendToScreen('b');
+      sendToScreen('l');
+      sendToScreen('e');
+      uint8_t onesPos = trebleSteps % 10;
+      uint8_t tensPos = trebleSteps / 10;
+      if (tensPos == 10) {
+        tensPos = 0;
+      }
+      uint8_t hundredsPos = trebleSteps / 100;
+      sendToScreen('0' + hundredsPos);
+      sendToScreen('0' + tensPos);
+      sendToScreen('0' + onesPos);
+
       trebleLevel += bass_trebleStepSize;
       SCI_32byte_write(CS, DCS, 0x2, registerValue);
     }
   }
   return trebleLevel;
 }
+
+// uint8_t trebleDown(gpio_s trebleDownButton) {
+//   uint16_t registerValue = SCI_32byte_read(CS, DCS, 0x2);
+//   uint8_t trebleLevel = (SCI_32byte_read(CS, DCS, 0x2) >> 12) & 0x0F;
+//   uint16_t total = (trebleLevel << 12) | 0x0FFF;
+//   if (gpio__get(trebleDownButton) && mode == Treble) {
+//     if (trebleLevel != noBassTreble) {
+//       trebleLevel -= bass_trebleStepSize;
+//       SCI_32byte_write(CS, DCS, 0x2, trebleLevel);
+//     }
+//   }
+//   return trebleLevel;
+// }
+
+// uint8_t trebleUp(gpio_s trebleUpButton) {
+//   uint16_t registerValue = SCI_32byte_read(CS, DCS, 0x2);
+//   uint8_t trebleLevel = (SCI_32byte_read(CS, DCS, 0x2) >> 12) & 0x0F;
+//   uint16_t total = (trebleLevel << 12) | 0x0FFF;
+//   registerValue &= total;
+//   if (gpio__get(trebleUpButton) && mode == Treble) {
+//     if (trebleLevel != maxBassTreble) {
+//       trebleLevel += bass_trebleStepSize;
+//       SCI_32byte_write(CS, DCS, 0x2, registerValue);
+//     }
+//   }
+//   return trebleLevel;
+// }
 
 uint8_t bassUp(gpio_s bassUpButton) {
   uint16_t registerValue = SCI_32byte_read(CS, DCS, 0x2);
@@ -238,6 +302,22 @@ uint8_t bassUp(gpio_s bassUpButton) {
   bassLevel &= total;
   if (gpio__get(bassUpButton) && mode == Bass) {
     if (bassLevel != maxBassTreble) {
+      bassSteps--;
+      clearScreen();
+      sendToScreen('b');
+      sendToScreen('a');
+      sendToScreen('s');
+      sendToScreen('s');
+      uint8_t onesPos = bassSteps % 10;
+      uint8_t tensPos = bassSteps / 10;
+      if (tensPos == 10) {
+        tensPos = 0;
+      }
+      uint8_t hundredsPos = bassSteps / 100;
+      sendToScreen('0' + hundredsPos);
+      sendToScreen('0' + tensPos);
+      sendToScreen('0' + onesPos);
+
       bassLevel += bass_trebleStepSize;
       SCI_32byte_write(CS, DCS, 0x2, bassLevel);
     }
@@ -252,6 +332,22 @@ uint8_t bassDown(gpio_s bassDownButton) {
   bassLevel &= total;
   if (gpio__get(bassDownButton) && mode == Bass) {
     if (bassLevel != noBassTreble) {
+      bassSteps--;
+      clearScreen();
+      sendToScreen('b');
+      sendToScreen('a');
+      sendToScreen('s');
+      sendToScreen('s');
+      uint8_t onesPos = bassSteps % 10;
+      uint8_t tensPos = bassSteps / 10;
+      if (tensPos == 10) {
+        tensPos = 0;
+      }
+      uint8_t hundredsPos = bassSteps / 100;
+      sendToScreen('0' + hundredsPos);
+      sendToScreen('0' + tensPos);
+      sendToScreen('0' + onesPos);
+
       bassLevel -= bass_trebleStepSize;
       SCI_32byte_write(CS, DCS, 0x2, bassLevel);
     }
@@ -259,13 +355,46 @@ uint8_t bassDown(gpio_s bassDownButton) {
   return bassLevel;
 }
 
+// uint8_t bassUp(gpio_s bassUpButton) {
+//   uint16_t registerValue = SCI_32byte_read(CS, DCS, 0x2);
+//   uint8_t bassLevel = (SCI_32byte_read(CS, DCS, 0x2) >> 4) & 0x0F;
+//   uint16_t total = (bassLevel << 4) | 0xFF0F;
+//   bassLevel &= total;
+//   if (gpio__get(bassUpButton) && mode == Bass) {
+//     if (bassLevel != maxBassTreble) {
+//       bassLevel += bass_trebleStepSize;
+//       SCI_32byte_write(CS, DCS, 0x2, bassLevel);
+//     }
+//   }
+//   return bassLevel;
+// }
+
+// uint8_t bassDown(gpio_s bassDownButton) {
+//   uint16_t registerValue = SCI_32byte_read(CS, DCS, 0x2);
+//   uint8_t bassLevel = (SCI_32byte_read(CS, DCS, 0x2) >> 4) & 0x0F;
+//   uint16_t total = (bassLevel << 4) | 0xFF0F;
+//   bassLevel &= total;
+//   if (gpio__get(bassDownButton) && mode == Bass) {
+//     if (bassLevel != noBassTreble) {
+//       bassLevel -= bass_trebleStepSize;
+//       SCI_32byte_write(CS, DCS, 0x2, bassLevel);
+//     }
+//   }
+//   return bassLevel;
+// }
+
 void pauseButton(gpio_s button) {
-  TaskHandle_t task_handle = xTaskGetHandle("player");
-  if (gpio__get(button) && mode == Volume) {
-    vTaskSuspend(task_handle);
-  } else {
-    if (gpio__get(button)) {
-      vTaskResume(task_handle);
-    }
+  TaskHandle_t playTask = xTaskGetHandle("player");
+  bool status = true;
+  if (gpio__get(button) && mode == Volume && status == true) {
+    vTaskSuspend(playTask);
+    //fprintf(stderr, "stopped tasks");
+    status = false;
+  }
+
+  if (gpio__get(button) && status == false) {
+    vTaskResume(playTask);
+    status = true;
+    //fprintf(stderr, "resumed tasks");
   }
 }

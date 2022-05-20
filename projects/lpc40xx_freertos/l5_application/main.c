@@ -47,7 +47,7 @@ static void play_file(FIL *fil_handle) {
     xQueueSend(mp3_data_transfer_queue, &buffer, 1000);
 
     if (uxQueueMessagesWaiting(songname_queue) > 0) {
-      //fprintf(stderr, " skip current song\n");
+      // fprintf(stderr, " skip current song\n");
       SCI_32byte_write(CS, DCS, 0x0000, 0x4804); // CANCEL
 
       // f_close(&fil_handle);
@@ -65,13 +65,13 @@ static void mp3_file_reader_task(void *parameter) {
     FRESULT Res;
     if (xQueueReceive(songname_queue, &filename_to_play, 1000)) {
       SCI_32byte_write(CS, DCS, 0x0000, 0x4800); // PLAY
-     // fprintf(stderr, " got the queue %s\n", filename_to_play.songname);
+                                                 // fprintf(stderr, " got the queue %s\n", filename_to_play.songname);
     }
     f_close(&file);
     Res = f_open(&file, filename_to_play.songname, (FA_READ | FA_OPEN_EXISTING));
 
     if (Res == FR_OK) {
-     // fprintf(stderr, " entered play_file\n");
+      // fprintf(stderr, " entered play_file\n");
       play_file(&file);
       // fprintf(stderr, " song end\n");
     } else {
@@ -101,10 +101,10 @@ static void mp3_data_transfer_task(void *parameter) {
     nextSong(volumeUpButton);
     previousSong(volumeDownButton);
     sendSong(pausePlaySendButton);
-    bassDown(volumeDownButton);
-    bassUp(volumeUpButton);
-    trebleDown(volumeDownButton);
-    trebleUp(volumeUpButton);
+    bassDown(volumeUpButton);
+    bassUp(volumeDownButton);
+    trebleDown(volumeUpButton);
+    trebleUp(volumeDownButton);
     modeSwitch(modeSwitchButton);
     pauseButton(pausePlaySendButton);
 
@@ -115,7 +115,7 @@ static void mp3_data_transfer_task(void *parameter) {
     // printf("reading from 0x0b volume %04X \n", SCI_32byte_read(CS, DCS, 0xb));
 
     if (xQueueReceive(mp3_data_transfer_queue, &mp3_playback_buffer, 1000)) {
-     // fprintf(stderr, "recieved the queue from play file\n");
+      // fprintf(stderr, "recieved the queue from play file\n");
       transfer_data_block(&mp3_playback_buffer);
     }
   }
@@ -130,7 +130,7 @@ static void startupTask(void) {
     char s[128];
     memcpy(firstSong.songname, asdf, sizeof(firstSong));
     sendSongToScreen(0);
-   // fprintf(stderr, " this is the firstsong.songname %s\n", firstSong.songname);
+    // fprintf(stderr, " this is the firstsong.songname %s\n", firstSong.songname);
     xQueueSend(songname_queue, &firstSong, 1000);
     vTaskSuspend(task_handle);
   }
