@@ -27,6 +27,10 @@ Frowny face is used to pause, play, or send the next song to play
 ## coding
 This device programmed onto the SJ2 board. Coded in C using FreeRtos and built using scons. Device features 4 main tasks, and has about 50% cpu usage while playing.
 
+Communicated using SPI and UART. Please see
+projects\lpc40xx_freertos\l5_application\main.c
+and the headers we created: songList.h, mp3Functions.h, playback.h, ssp0lab.h, lcd.h
+
 
 
 
